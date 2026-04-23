@@ -1,0 +1,59 @@
+# Root runtime artifacts
+.DS_Store
+Thumbs.db
+cache/
+logs/
+.agent/
+论文/
+
+# Frontend / backend dependencies and build outputs
+app/node_modules/
+app/server/node_modules/
+app/dist/
+app/dist-ssr/
+app/build/
+app/.vite/
+app/*.tsbuildinfo
+app/server/dist/
+app/server/.npm-cache/
+
+# Environment files
+app/.env
+app/.env.local
+app/.env.*.local
+app/*.local
+app/server/.env
+
+# Databases and generated media
+app/server/data/*.db
+app/server/data/*.db-shm
+app/server/data/*.db-wal
+!app/server/data/.gitkeep
+app/server/public/audio/*.mp3
+app/server/public/audio/*.flac
+app/server/public/audio/*.wav
+app/server/public/audio/*/
+!app/server/public/audio/.gitkeep
+app/server/public/audio/reference-tracks/*
+!app/server/public/audio/reference-tracks/.gitkeep
+app/server/public/uploads/
+app/server/public/demucs-web/output/
+
+# Temporary files
+app/tmp/
+app/temp/
+app/*.tmp
+app/server/tmp/
+app/server/*.log
+app/*.log
+
+# Python caches
+app/__pycache__/
+app/**/*.py[cod]
+app/.venv/
+
+# Large local-only project assets
+app/ACE-Step-1.5/
+app/ComfyUI/
+app/comfyui/
+app/wavacity-editor/
