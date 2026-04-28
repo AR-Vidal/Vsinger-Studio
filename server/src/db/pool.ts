@@ -74,7 +74,7 @@ function executeQuery(sql: string, params?: unknown[], dbRef: Database.Database 
     const columns = insertMatch[2].split(',').map(c => c.trim().toLowerCase());
 
     // Tables that need auto-generated IDs
-    const tablesNeedingId = ['users', 'songs', 'playlists', 'generation_jobs', 'comments', 'reference_tracks', 'contact_submissions', 'virtual_singers'];
+    const tablesNeedingId = ['users', 'songs', 'playlists', 'generation_jobs', 'comments', 'reference_tracks', 'virtual_singers'];
 
     if (tablesNeedingId.includes(tableName.toLowerCase()) && !columns.includes('id')) {
       // Add id to the INSERT

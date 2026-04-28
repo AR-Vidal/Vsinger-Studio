@@ -60,45 +60,6 @@ router.get('/', authMiddleware, async (req: AuthenticatedRequest, res: Response)
     }
 });
 
-// Get featured public playlists (for search/explore page)
-router.get('/public/featured', async (_req, res: Response) => {
-    try {
-        // First try to get playlists with songs
-        let result = await pool.query(
-            `SELECT p.id, p.name, p.description, p.cover_url, p.created_at,
-                    u.username as creator, u.avatar_url as creator_avatar,
-                    COUNT(ps.song_id) as song_count
-             FROM playlists p
-             JOIN users u ON p.user_id = u.id
-             LEFT JOIN playlist_songs ps ON p.id = ps.playlist_id
-             WHERE p.is_public = true
-             GROUP BY p.id, u.username, u.avatar_url
-             HAVING COUNT(ps.song_id) > 0
-             ORDER BY COUNT(ps.song_id) DESC
-             LIMIT 20`
-        );
-
-        // Fallback: if no playlists with songs, get any public playlists
-        if (result.rows.length === 0) {
-            result = await pool.query(
-                `SELECT p.id, p.name, p.description, p.cover_url, p.created_at,
-                        u.username as creator, u.avatar_url as creator_avatar,
-                        0 as song_count
-                 FROM playlists p
-                 JOIN users u ON p.user_id = u.id
-                 WHERE p.is_public = true
-                 ORDER BY p.created_at DESC
-                 LIMIT 20`
-            );
-        }
-
-        res.json({ playlists: result.rows });
-    } catch (error) {
-        console.error('Get featured playlists error:', error);
-        res.status(500).json({ error: 'Internal server error' });
-    }
-});
-
 // Get playlist by ID
 router.get('/:id', optionalAuthMiddleware, async (req: AuthenticatedRequest, res: Response) => {
     try {

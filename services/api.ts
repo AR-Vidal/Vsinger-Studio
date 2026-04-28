@@ -166,11 +166,6 @@ export const songsApi = {
     return { songs: transformSongs(result.songs) };
   },
 
-  getFeaturedSongs: async (): Promise<{ songs: Song[] }> => {
-    const result = await api('/api/songs/public/featured') as { songs: Song[] };
-    return { songs: transformSongs(result.songs) };
-  },
-
   getSong: async (id: string, token?: string | null): Promise<{ song: Song }> => {
     const result = await api(`/api/songs/${id}`, { token: token || undefined }) as { song: Song };
     const rawUrl = result.song.audio_url || result.song.audioUrl;
@@ -523,9 +518,6 @@ export const usersApi = {
   getPublicPlaylists: (username: string): Promise<{ playlists: any[] }> =>
     api(`/api/users/${username}/playlists`),
 
-  getFeaturedCreators: (): Promise<{ creators: Array<UserProfile & { follower_count?: number }> }> =>
-    api('/api/users/public/featured'),
-
   updateProfile: (updates: Partial<User>, token: string): Promise<{ user: User }> =>
     api('/api/users/me', { method: 'PATCH', body: updates, token }),
 
@@ -594,9 +586,6 @@ export const playlistsApi = {
   getPlaylist: (id: string, token?: string | null): Promise<{ playlist: Playlist, songs: any[] }> =>
     api(`/api/playlists/${id}`, { token: token || undefined }),
 
-  getFeaturedPlaylists: (): Promise<{ playlists: Array<Playlist & { creator?: string; creator_avatar?: string }> }> =>
-    api('/api/playlists/public/featured'),
-
   addSong: (playlistId: string, songId: string, token: string): Promise<{ success: boolean }> =>
     api(`/api/playlists/${playlistId}/songs`, { method: 'POST', body: { songId }, token }),
 
@@ -608,39 +597,6 @@ export const playlistsApi = {
 
   delete: (id: string, token: string): Promise<{ success: boolean }> =>
     api(`/api/playlists/${id}`, { method: 'DELETE', token }),
-};
-
-// Search API
-export interface SearchResult {
-  songs: Song[];
-  creators: Array<UserProfile & { follower_count?: number }>;
-  playlists: Array<Playlist & { creator?: string; creator_avatar?: string }>;
-}
-
-export const searchApi = {
-  search: async (query: string, type?: 'songs' | 'creators' | 'playlists' | 'all'): Promise<SearchResult> => {
-    const params = new URLSearchParams({ q: query });
-    if (type && type !== 'all') params.append('type', type);
-    const result = await api(`/api/search?${params}`) as SearchResult;
-    return {
-      ...result,
-      songs: transformSongs(result.songs || []),
-    };
-  },
-};
-
-// Contact Form API
-export interface ContactFormData {
-  name: string;
-  email: string;
-  subject: string;
-  message: string;
-  category: 'general' | 'support' | 'business' | 'press' | 'legal';
-}
-
-export const contactApi = {
-  submit: (data: ContactFormData): Promise<{ success: boolean; message: string; id: string }> =>
-    api('/api/contact', { method: 'POST', body: data }),
 };
 
 // Training API (LoRA fine-tuning via Gradio)

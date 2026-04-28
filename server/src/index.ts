@@ -21,7 +21,6 @@ import songsRoutes from './routes/songs.js';
 import generateRoutes from './routes/generate.js';
 import usersRoutes from './routes/users.js';
 import playlistsRoutes from './routes/playlists.js';
-import contactRoutes from './routes/contact.js';
 import referenceTrackRoutes from './routes/referenceTrack.js';
 import loraRoutes from './routes/lora.js';
 import trainingRoutes from './routes/training.js';
@@ -108,7 +107,7 @@ app.use('/demucs-web', (req, res, next) => {
 
 // Health check
 app.get('/health', (_req, res) => {
-  res.json({ status: 'ok', service: 'ACE-Step UI API' });
+  res.json({ status: 'ok', service: 'VsingerStudio API' });
 });
 
 // oEmbed endpoint for rich embeds
@@ -145,7 +144,7 @@ app.get('/api/oembed', async (req, res) => {
     res.json({
       version: '1.0',
       type: 'rich',
-      provider_name: 'ACE-Step UI',
+      provider_name: 'VsingerStudio',
       provider_url: config.frontendUrl,
       title: song.title,
       author_name: song.artist_name,
@@ -194,7 +193,7 @@ app.get('/song/:id', async (req, res) => {
     const song = result.rows[0];
     const coverUrl = song.cover_url || `https://picsum.photos/seed/${song.id}/1200/630`;
     const title = `${song.title} by ${song.artist_name}`;
-    const description = `🎵 ${song.style} • Create your own AI music free on ACE-Step UI`;
+    const description = `🎵 ${song.style} • Create your own virtual singer music with VsingerStudio`;
     const pageUrl = `${config.frontendUrl}/song/${song.id}`;
 
     res.send(`<!DOCTYPE html>
@@ -202,7 +201,7 @@ app.get('/song/:id', async (req, res) => {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${title} | ACE-Step UI</title>
+  <title>${title} | VsingerStudio</title>
   <meta name="title" content="${title}">
   <meta name="description" content="${description}">
   <meta property="og:type" content="music.song">
@@ -210,7 +209,7 @@ app.get('/song/:id', async (req, res) => {
   <meta property="og:title" content="${title}">
   <meta property="og:description" content="${description}">
   <meta property="og:image" content="${coverUrl}">
-  <meta property="og:site_name" content="ACE-Step UI">
+  <meta property="og:site_name" content="VsingerStudio">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="${title}">
   <meta name="twitter:description" content="${description}">
@@ -218,7 +217,7 @@ app.get('/song/:id', async (req, res) => {
   <meta http-equiv="refresh" content="0;url=${config.frontendUrl}?song=${song.id}">
 </head>
 <body>
-  <p>Redirecting to <a href="${config.frontendUrl}?song=${song.id}">ACE-Step UI</a>...</p>
+  <p>Redirecting to <a href="${config.frontendUrl}?song=${song.id}">VsingerStudio</a>...</p>
 </body>
 </html>`);
   } catch (error) {
@@ -331,86 +330,12 @@ app.get('/api/pexels/videos', async (req, res) => {
   }
 });
 
-// Search endpoint
-app.get('/api/search', async (req, res) => {
-  const query = (req.query.q as string)?.trim();
-  const type = req.query.type as string;
-
-  if (!query) {
-    res.status(400).json({ error: 'Search query required' });
-    return;
-  }
-
-  try {
-    const searchPattern = `%${query}%`;
-    const results: { songs: unknown[]; creators: unknown[]; playlists: unknown[] } = {
-      songs: [],
-      creators: [],
-      playlists: [],
-    };
-
-    if (!type || type === 'all' || type === 'songs') {
-      const songsResult = await pool.query(
-        `SELECT s.id, s.title, s.lyrics, s.style, s.caption, s.cover_url, s.audio_url,
-                s.duration, s.tags, s.like_count, s.view_count, s.is_public, s.created_at,
-                u.username as creator, u.avatar_url as creator_avatar,
-                s.singer_id, s.singer_name_snapshot,
-                COALESCE(vs.name, s.singer_name_snapshot) AS singer_name,
-                CASE WHEN COALESCE(vs.name, s.singer_name_snapshot) IS NOT NULL THEN 1 ELSE 0 END AS has_singer
-         FROM songs s
-         LEFT JOIN users u ON s.user_id = u.id
-         LEFT JOIN virtual_singers vs ON s.singer_id = vs.id
-         WHERE s.is_public = 1
-           AND (s.title LIKE ? COLLATE NOCASE OR s.style LIKE ? COLLATE NOCASE)
-         ORDER BY s.like_count DESC
-         LIMIT 20`,
-        [searchPattern, searchPattern]
-      );
-      results.songs = songsResult.rows;
-    }
-
-    if (!type || type === 'all' || type === 'creators') {
-      const creatorsResult = await pool.query(
-        `SELECT u.id, u.username, u.bio, u.avatar_url, u.created_at,
-                (SELECT COUNT(*) FROM followers WHERE following_id = u.id) as follower_count
-         FROM users u
-         WHERE u.username LIKE ? COLLATE NOCASE
-         ORDER BY (SELECT COUNT(*) FROM followers WHERE following_id = u.id) DESC
-         LIMIT 20`,
-        [searchPattern]
-      );
-      results.creators = creatorsResult.rows;
-    }
-
-    if (!type || type === 'all' || type === 'playlists') {
-      const playlistsResult = await pool.query(
-        `SELECT p.id, p.name, p.description, p.cover_url, p.created_at,
-                u.username as creator, u.avatar_url as creator_avatar,
-                (SELECT COUNT(*) FROM playlist_songs ps WHERE ps.playlist_id = p.id) as song_count
-         FROM playlists p
-         JOIN users u ON p.user_id = u.id
-         WHERE p.is_public = 1 AND p.name LIKE ? COLLATE NOCASE
-         ORDER BY (SELECT COUNT(*) FROM playlist_songs ps WHERE ps.playlist_id = p.id) DESC
-         LIMIT 20`,
-        [searchPattern]
-      );
-      results.playlists = playlistsResult.rows;
-    }
-
-    res.json(results);
-  } catch (error) {
-    console.error('Search error:', error);
-    res.status(500).json({ error: 'Search failed' });
-  }
-});
-
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/songs', songsRoutes);
 app.use('/api/generate', generateRoutes);
 app.use('/api/users', usersRoutes);
 app.use('/api/playlists', playlistsRoutes);
-app.use('/api/contact', contactRoutes);
 app.use('/api/reference-tracks', referenceTrackRoutes);
 app.use('/api/lora', loraRoutes);
 app.use('/api/training', trainingRoutes);
@@ -435,7 +360,7 @@ cron.schedule('0 3 * * *', async () => {
 
 // Start server on all interfaces for LAN access
 app.listen(config.port, '0.0.0.0', () => {
-  console.log(`ACE-Step UI Server running on http://localhost:${config.port}`);
+  console.log(`VsingerStudio server running on http://localhost:${config.port}`);
   console.log(`Environment: ${config.nodeEnv}`);
   console.log(`ACE-Step API: ${config.acestep.apiUrl}`);
 

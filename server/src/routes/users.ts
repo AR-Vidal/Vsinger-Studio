@@ -30,40 +30,6 @@ const upload = multer({
   }
 });
 
-// Get featured creators (for search/explore page)
-router.get('/public/featured', async (_req, res: Response) => {
-    try {
-        // First try to get users with public songs
-        let result = await pool.query(
-            `SELECT u.id, u.username, u.bio, u.avatar_url, u.created_at,
-                    (SELECT COUNT(*) FROM followers WHERE following_id = u.id) as follower_count,
-                    (SELECT COUNT(*) FROM songs WHERE user_id = u.id AND is_public = 1) as song_count
-             FROM users u
-             WHERE EXISTS (SELECT 1 FROM songs WHERE user_id = u.id AND is_public = 1)
-             ORDER BY (SELECT COUNT(*) FROM songs WHERE user_id = u.id AND is_public = 1) DESC,
-                      (SELECT COUNT(*) FROM followers WHERE following_id = u.id) DESC
-             LIMIT 20`
-        );
-
-        // Fallback: if no users with public songs, get any recent users
-        if (result.rows.length === 0) {
-            result = await pool.query(
-                `SELECT u.id, u.username, u.bio, u.avatar_url, u.created_at,
-                        (SELECT COUNT(*) FROM followers WHERE following_id = u.id) as follower_count,
-                        0 as song_count
-                 FROM users u
-                 ORDER BY u.created_at DESC
-                 LIMIT 20`
-            );
-        }
-
-        res.json({ creators: result.rows });
-    } catch (error) {
-        console.error('Get featured creators error:', error);
-        res.status(500).json({ error: 'Internal server error' });
-    }
-});
-
 // Get user profile by username
 router.get('/:username', optionalAuthMiddleware, async (req: AuthenticatedRequest, res: Response) => {
     try {

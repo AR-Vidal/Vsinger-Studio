@@ -43,7 +43,7 @@ export const config = {
 
   // Simplified JWT (for local session, not critical security)
   jwt: {
-    secret: process.env.JWT_SECRET || 'ace-step-ui-local-secret',
+    secret: process.env.JWT_SECRET || 'vsinger-studio-local-secret',
     expiresIn: '365d', // Long-lived for local app
   },
 };

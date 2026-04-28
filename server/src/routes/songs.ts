@@ -178,56 +178,6 @@ router.get('/', authMiddleware, async (req: AuthenticatedRequest, res: Response)
   }
 });
 
-// Get featured songs (random songs for discover page)
-router.get('/public/featured', optionalAuthMiddleware, async (_req: AuthenticatedRequest, res: Response) => {
-  try {
-    // Return random songs - for local app, show all songs randomly
-    const result = await pool.query(
-      `SELECT s.id, s.title, s.lyrics, s.style, s.caption, s.cover_url, s.audio_url,
-              s.duration, s.bpm, s.key_scale, s.time_signature, s.tags, s.like_count, s.view_count, s.created_at, s.user_id,
-              COALESCE(u.username, 'Anonymous') as creator, u.avatar_url as creator_avatar, s.generation_params,
-              ${SINGER_SELECT_FIELDS}
-       FROM songs s
-       LEFT JOIN users u ON s.user_id = u.id
-       LEFT JOIN virtual_singers vs ON s.singer_id = vs.id
-       ORDER BY RANDOM()
-       LIMIT 20`
-    );
-
-    const songs = await Promise.all(
-      result.rows.map(async (row) => ({
-        ...(await normalizeSongForResponse(row, true)),
-        id: row.id,
-        title: row.title,
-        lyrics: row.lyrics,
-        style: row.style,
-        caption: row.caption,
-        cover_url: row.cover_url,
-        bpm: row.bpm,
-        key_scale: row.key_scale,
-        time_signature: row.time_signature,
-        tags: row.tags || [],
-        like_count: row.like_count || 0,
-        view_count: row.view_count || 0,
-        created_at: row.created_at,
-        creator: row.creator,
-        creator_avatar: row.creator_avatar,
-        user_id: row.user_id,
-        is_public: true,
-        singer_id: row.singer_id,
-        singer_name_snapshot: row.singer_name_snapshot,
-        singer_name: row.singer_name,
-        has_singer: Boolean(row.has_singer),
-      }))
-    );
-
-    res.json({ songs });
-  } catch (error) {
-    console.error('Get featured/random songs error:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
 // Get public songs (for explore/home)
 router.get('/public', optionalAuthMiddleware, async (req: AuthenticatedRequest, res: Response) => {
   try {

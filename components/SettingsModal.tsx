@@ -105,7 +105,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
             </div>
             <div className="space-y-2 pl-7 text-sm text-zinc-600 dark:text-zinc-400">
               <p>{t('version')} 2.0.0</p>
-              <p>ACE-Step UI - 本地 AI 音乐生成平台</p>
+              <p>VsingerStudio - 本地 AI 音乐生成平台</p>
               <p className="text-xs text-zinc-400 dark:text-zinc-500">
                 基于 ACE-Step 1.5，保留创作、训练、音乐库和虚拟歌手管理能力。
               </p>

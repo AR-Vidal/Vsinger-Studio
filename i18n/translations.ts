@@ -7,7 +7,6 @@ export const translations = {
     library: 'Library',
     search: 'Search',
     training: 'Training',
-    news: 'News',
 
     // Theme
     lightMode: 'Light Mode',
@@ -19,7 +18,7 @@ export const translations = {
     settings: 'Settings',
     
     // Username Modal
-    welcomeTitle: 'Welcome to ACE-Step UI',
+    welcomeTitle: 'Welcome to VsingerStudio',
     welcomeSubtitle: 'Enter your name to get started creating AI music',
     yourName: 'Your Name',
     enterYourName: 'Enter your name',
@@ -43,7 +42,7 @@ export const translations = {
     failedToDeleteSong: 'Failed to delete song',
     
     // Sidebar
-    aceStepUI: 'ACE-Step UI',
+    aceStepUI: 'VsingerStudio',
     collapseSidebar: 'Collapse Sidebar',
     expandSidebar: 'Expand Sidebar',
 
@@ -386,18 +385,8 @@ export const translations = {
     repaintTask: 'Repaint',
     
     // Search Page
-    searchSongsPlaceholder: 'Search for songs, playlists, creators, or genres',
-    songsMatching: 'Songs matching',
     featuredSongs: 'Featured Songs',
     noSongsFound: 'No songs found matching',
-    creatorsMatching: 'Creators matching',
-    featuredCreators: 'Featured Creators',
-    noCreatorsFound: 'No creators found matching',
-    noCreatorsYet: 'No creators yet. Be the first to share your music!',
-    playlistsMatching: 'Playlists matching',
-    featuredPlaylists: 'Featured Playlists',
-    noPlaylistsFound: 'No playlists found matching',
-    noPlaylistsYet: 'No public playlists yet. Create one and share your favorites!',
     genres: 'Genres',
     songs: 'songs',
     
@@ -509,7 +498,7 @@ export const translations = {
     shareViaEmail: 'Share via Email',
     copyLink: 'Copy Link',
     emailSubject: 'Check out this AI song',
-    emailBody: 'Hey!\n\nI created this AI-generated song and thought you\'d love it:\n\n"{title}" by {creator}\n{style}\n\nListen here: {url}\n\nMade with ACE-Step UI - free and open source local AI music generation!',
+    emailBody: 'Hey!\n\nI created this AI-generated song and thought you\'d love it:\n\n"{title}" by {creator}\n{style}\n\nListen here: {url}\n\nMade with VsingerStudio - free and open source local AI music generation!',
     
     // Reference Modal
     referenceModalTitle: 'Reference',
@@ -606,7 +595,6 @@ export const translations = {
     library: '音乐库',
     search: '搜索',
     training: '训练',
-    news: '新闻',
 
     // Theme
     lightMode: '浅色模式',
@@ -618,7 +606,7 @@ export const translations = {
     settings: '设置',
     
     // Username Modal
-    welcomeTitle: '欢迎使用 ACE-Step UI',
+    welcomeTitle: '欢迎使用 VsingerStudio',
     welcomeSubtitle: '输入您的名字开始创作 AI 音乐',
     yourName: '您的名字',
     enterYourName: '请输入您的名字',
@@ -642,7 +630,7 @@ export const translations = {
     failedToDeleteSong: '删除歌曲失败',
     
     // Sidebar
-    aceStepUI: 'ACE-Step UI',
+    aceStepUI: 'VsingerStudio',
     collapseSidebar: '收起侧边栏',
     expandSidebar: '展开侧边栏',
 
@@ -985,18 +973,8 @@ export const translations = {
     repaintTask: '重绘',
     
     // Search Page
-    searchSongsPlaceholder: '搜索歌曲、播放列表、创作者或风格',
-    songsMatching: '匹配的歌曲',
     featuredSongs: '精选歌曲',
     noSongsFound: '未找到匹配的歌曲',
-    creatorsMatching: '匹配的创作者',
-    featuredCreators: '精选创作者',
-    noCreatorsFound: '未找到匹配的创作者',
-    noCreatorsYet: '暂无创作者。成为第一个分享音乐的人！',
-    playlistsMatching: '匹配的播放列表',
-    featuredPlaylists: '精选播放列表',
-    noPlaylistsFound: '未找到匹配的播放列表',
-    noPlaylistsYet: '暂无公开播放列表。创建一个并分享你的最爱！',
     genres: '风格',
     songs: '首歌曲',
     
@@ -1108,7 +1086,7 @@ export const translations = {
     shareViaEmail: '通过邮件分享',
     copyLink: '复制链接',
     emailSubject: '来听听这首AI歌曲',
-    emailBody: '嘿！\n\n我创作了这首AI生成的歌曲，觉得你会喜欢：\n\n《{title}》- {creator}\n{style}\n\n点击收听：{url}\n\n使用 ACE-Step UI 制作 - 免费开源的本地AI音乐生成工具！',
+    emailBody: '嘿！\n\n我创作了这首AI生成的歌曲，觉得你会喜欢：\n\n《{title}》- {creator}\n{style}\n\n点击收听：{url}\n\n使用 VsingerStudio 制作 - 免费开源的本地AI音乐生成工具！',
     
     // Reference Modal
     referenceModalTitle: '参考音频',
@@ -1205,7 +1183,6 @@ export const translations = {
     library: 'ライブラリ',
     search: '検索',
     training: 'トレーニング',
-    news: 'ニュース',
 
     // Theme
     lightMode: 'ライトモード',
@@ -1217,7 +1194,7 @@ export const translations = {
     settings: '設定',
     
     // Username Modal
-    welcomeTitle: 'ACE-Step UIへようこそ',
+    welcomeTitle: 'VsingerStudioへようこそ',
     welcomeSubtitle: 'AI音楽作成を始めるために名前を入力してください',
     yourName: 'お名前',
     enterYourName: '名前を入力',
@@ -1241,7 +1218,7 @@ export const translations = {
     failedToDeleteSong: '曲の削除に失敗しました',
     
     // Sidebar
-    aceStepUI: 'ACE-Step UI',
+    aceStepUI: 'VsingerStudio',
     collapseSidebar: 'サイドバーを折りたたむ',
     expandSidebar: 'サイドバーを展開',
 
@@ -1584,18 +1561,8 @@ export const translations = {
     repaintTask: 'リペイント',
     
     // Search Page
-    searchSongsPlaceholder: '曲、プレイリスト、クリエイター、スタイルを検索',
-    songsMatching: '一致する曲',
     featuredSongs: '注目の曲',
     noSongsFound: '一致する曲が見つかりません',
-    creatorsMatching: '一致するクリエイター',
-    featuredCreators: '注目のクリエイター',
-    noCreatorsFound: '一致するクリエイターが見つかりません',
-    noCreatorsYet: 'まだクリエイターがいません。最初に音楽を共有しましょう！',
-    playlistsMatching: '一致するプレイリスト',
-    featuredPlaylists: '注目のプレイリスト',
-    noPlaylistsFound: '一致するプレイリストが見つかりません',
-    noPlaylistsYet: '公開プレイリストがまだありません。作成してお気に入りを共有しましょう！',
     genres: 'ジャンル',
     songs: '曲',
     
@@ -1707,7 +1674,7 @@ export const translations = {
     shareViaEmail: 'メールで共有',
     copyLink: 'リンクをコピー',
     emailSubject: 'このAI曲をチェックしてください',
-    emailBody: 'こんにちは！\n\n私がこのAI生成の曲を作りました。気に入ってもらえると思います：\n\n「{title}」by {creator}\n{style}\n\nここで聴いてください：{url}\n\nACE-Step UIで作成 - 無料でオープンソースのローカルAI音楽生成！',
+    emailBody: 'こんにちは！\n\n私がこのAI生成の曲を作りました。気に入ってもらえると思います：\n\n「{title}」by {creator}\n{style}\n\nここで聴いてください：{url}\n\nVsingerStudioで作成 - 無料でオープンソースのローカルAI音楽生成！',
     
     // Reference Modal
     referenceModalTitle: 'リファレンス',
@@ -1804,7 +1771,6 @@ export const translations = {
     library: '라이브러리',
     search: '검색',
     training: '훈련',
-    news: '뉴스',
 
     // Theme
     lightMode: '라이트 모드',
@@ -1816,7 +1782,7 @@ export const translations = {
     settings: '설정',
     
     // Username Modal
-    welcomeTitle: 'ACE-Step UI에 오신 것을 환영합니다',
+    welcomeTitle: 'VsingerStudio에 오신 것을 환영합니다',
     welcomeSubtitle: 'AI 음악 제작을 시작하려면 이름을 입력하세요',
     yourName: '이름',
     enterYourName: '이름 입력',
@@ -1840,7 +1806,7 @@ export const translations = {
     failedToDeleteSong: '곡 삭제에 실패했습니다',
     
     // Sidebar
-    aceStepUI: 'ACE-Step UI',
+    aceStepUI: 'VsingerStudio',
     collapseSidebar: '사이드바 접기',
     expandSidebar: '사이드바 펼치기',
 
@@ -2183,18 +2149,8 @@ export const translations = {
     repaintTask: '리페인트',
     
     // Search Page
-    searchSongsPlaceholder: '곡, 재생목록, 제작자 또는 스타일 검색',
-    songsMatching: '일치하는 곡',
     featuredSongs: '추천 곡',
     noSongsFound: '일치하는 곡을 찾을 수 없습니다',
-    creatorsMatching: '일치하는 제작자',
-    featuredCreators: '추천 제작자',
-    noCreatorsFound: '일치하는 제작자를 찾을 수 없습니다',
-    noCreatorsYet: '아직 제작자가 없습니다. 음악을 공유하는 첫 번째 사람이 되세요!',
-    playlistsMatching: '일치하는 재생목록',
-    featuredPlaylists: '추천 재생목록',
-    noPlaylistsFound: '일치하는 재생목록을 찾을 수 없습니다',
-    noPlaylistsYet: '공개 재생목록이 아직 없습니다. 만들고 즐겨찾기를 공유하세요!',
     genres: '장르',
     songs: '곡',
     
@@ -2306,7 +2262,7 @@ export const translations = {
     shareViaEmail: '이메일로 공유',
     copyLink: '링크 복사',
     emailSubject: '이 AI 곡을 들어보세요',
-    emailBody: '안녕하세요!\n\n제가 만든 이 AI 생성 곡을 들어보세요. 마음에 드실 거예요:\n\n"{title}" - {creator}\n{style}\n\n여기서 들으세요: {url}\n\nACE-Step UI로 제작 - 무료 오픈 소스 로컬 AI 음악 생성!',
+    emailBody: '안녕하세요!\n\n제가 만든 이 AI 생성 곡을 들어보세요. 마음에 드실 거예요:\n\n"{title}" - {creator}\n{style}\n\n여기서 들으세요: {url}\n\nVsingerStudio로 제작 - 무료 오픈 소스 로컬 AI 음악 생성!',
     
     // Reference Modal
     referenceModalTitle: '참조 음악',

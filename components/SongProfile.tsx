@@ -27,8 +27,8 @@ const updateMetaTags = (song: Song) => {
     const baseUrl = window.location.origin;
     const songUrl = `${baseUrl}/song/${song.id}`;
     const artistName = getSongArtistName(song);
-    const title = `${song.title} - ${artistName} | ACE-Step UI`;
-    const description = `Listen to "${song.title}" - ${song.style}. Plays: ${song.viewCount || 0}, likes: ${song.likeCount || 0}. Created with ACE-Step UI.`;
+    const title = `${song.title} - ${artistName} | VsingerStudio`;
+    const description = `Listen to "${song.title}" - ${song.style}. Plays: ${song.viewCount || 0}, likes: ${song.likeCount || 0}. Created with VsingerStudio.`;
 
     document.title = title;
 
@@ -68,7 +68,7 @@ const updateMetaTags = (song: Song) => {
 };
 
 const resetMetaTags = () => {
-    document.title = 'ACE-Step UI - Local AI Music Generator';
+    document.title = 'VsingerStudio - Local AI Music Generator';
     const defaultDescription = 'Create original AI music locally with custom lyrics, styles, and high-quality generation.';
     const defaultImage = '/og-image.png';
 
@@ -78,11 +78,11 @@ const resetMetaTags = () => {
     };
 
     updateMeta('meta[name="description"]', defaultDescription);
-    updateMeta('meta[property="og:title"]', 'ACE-Step UI - Local AI Music Generator');
+    updateMeta('meta[property="og:title"]', 'VsingerStudio - Local AI Music Generator');
     updateMeta('meta[property="og:description"]', defaultDescription);
     updateMeta('meta[property="og:image"]', defaultImage);
     updateMeta('meta[property="og:type"]', 'website');
-    updateMeta('meta[name="twitter:title"]', 'ACE-Step UI - Local AI Music Generator');
+    updateMeta('meta[name="twitter:title"]', 'VsingerStudio - Local AI Music Generator');
     updateMeta('meta[name="twitter:description"]', defaultDescription);
     updateMeta('meta[name="twitter:image"]', defaultImage);
 };

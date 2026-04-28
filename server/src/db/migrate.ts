@@ -148,18 +148,6 @@ CREATE TABLE IF NOT EXISTS singer_voice_binding (
   updated_at TEXT DEFAULT (datetime('now'))
 );
 
--- Contact submissions table
-CREATE TABLE IF NOT EXISTS contact_submissions (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  email TEXT NOT NULL,
-  subject TEXT NOT NULL,
-  message TEXT NOT NULL,
-  category TEXT DEFAULT 'general',
-  is_read INTEGER DEFAULT 0,
-  created_at TEXT DEFAULT (datetime('now'))
-);
-
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_songs_user_id ON songs(user_id);
 CREATE INDEX IF NOT EXISTS idx_songs_created_at ON songs(created_at);
