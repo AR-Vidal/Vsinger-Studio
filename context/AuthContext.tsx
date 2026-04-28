@@ -6,7 +6,9 @@ interface AuthContextType {
   token: string | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  setupUser: (username: string) => Promise<void>;
+  setupUser: (username: string, password: string) => Promise<void>;
+  login: (username: string, password: string) => Promise<void>;
+  register: (username: string, password: string) => Promise<void>;
   updateUsername: (username: string) => Promise<void>;
   logout: () => void;
   refreshUser: () => Promise<void>;
@@ -14,38 +16,46 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const TOKEN_KEY = 'acestep_token';
-const USER_KEY = 'acestep_user';
+const TOKEN_KEY = 'vsinger_auth_token_v2';
+const USER_KEY = 'vsinger_auth_user_v2';
 
 export function AuthProvider({ children }: { children: ReactNode }): React.ReactElement {
-  // Start with null - we'll auto-login from database on mount
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   const isAuthenticated = !!user && !!token;
 
-  // Auto-login on mount: Try to get existing user from database
+  const persistSession = useCallback((userData: User, newToken: string): void => {
+    setUser(userData);
+    setToken(newToken);
+    localStorage.setItem(TOKEN_KEY, newToken);
+    localStorage.setItem(USER_KEY, JSON.stringify(userData));
+  }, []);
+
   useEffect(() => {
     async function initAuth(): Promise<void> {
+      const storedToken = localStorage.getItem(TOKEN_KEY);
+      const storedUser = localStorage.getItem(USER_KEY);
+
+      if (!storedToken) {
+        localStorage.removeItem('acestep_token');
+        localStorage.removeItem('acestep_user');
+        setIsLoading(false);
+        return;
+      }
+
       try {
-        // First, try auto-login from database (for local single-user app)
-        const { user: userData, token: newToken } = await authApi.auto();
+        if (storedUser) {
+          setUser(JSON.parse(storedUser));
+          setToken(storedToken);
+        }
+        const { user: userData } = await authApi.me(storedToken);
         setUser(userData);
-        setToken(newToken);
-        localStorage.setItem(TOKEN_KEY, newToken);
+        setToken(storedToken);
         localStorage.setItem(USER_KEY, JSON.stringify(userData));
       } catch (error: unknown) {
-        // No user in database (404) or server error - that's okay
-        // Clear any stale localStorage data
-        const err = error as { message?: string };
-        if (err.message?.startsWith('404:')) {
-          // No user exists yet - frontend will show username setup
-          console.log('No user in database, need to set up username');
-        } else {
-          console.warn('Auto-login failed:', error);
-        }
-        // Clear stale data
+        console.warn('Stored login expired or invalid:', error);
         setToken(null);
         setUser(null);
         localStorage.removeItem(TOKEN_KEY);
@@ -58,13 +68,20 @@ export function AuthProvider({ children }: { children: ReactNode }): React.React
     initAuth();
   }, []);
 
-  const setupUser = useCallback(async (username: string): Promise<void> => {
-    const { user: userData, token: newToken } = await authApi.setup(username);
-    setUser(userData);
-    setToken(newToken);
-    localStorage.setItem(TOKEN_KEY, newToken);
-    localStorage.setItem(USER_KEY, JSON.stringify(userData));
-  }, []);
+  const setupUser = useCallback(async (username: string, password: string): Promise<void> => {
+    const { user: userData, token: newToken } = await authApi.setup(username, password);
+    persistSession(userData, newToken);
+  }, [persistSession]);
+
+  const login = useCallback(async (username: string, password: string): Promise<void> => {
+    const { user: userData, token: newToken } = await authApi.login(username, password);
+    persistSession(userData, newToken);
+  }, [persistSession]);
+
+  const register = useCallback(async (username: string, password: string): Promise<void> => {
+    const { user: userData, token: newToken } = await authApi.register(username, password);
+    persistSession(userData, newToken);
+  }, [persistSession]);
 
   const updateUsername = useCallback(async (username: string): Promise<void> => {
     if (!token) throw new Error('Not authenticated');
@@ -100,6 +117,8 @@ export function AuthProvider({ children }: { children: ReactNode }): React.React
     isLoading,
     isAuthenticated,
     setupUser,
+    login,
+    register,
     updateUsername,
     logout,
     refreshUser,

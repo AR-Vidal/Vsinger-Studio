@@ -25,6 +25,10 @@ interface RightSidebarProps {
     currentSong?: Song | null;
 }
 
+const getSongArtistName = (song: Song): string => (
+    song.singerName || song.singerNameSnapshot || 'Virtual Singer'
+);
+
 export const RightSidebar: React.FC<RightSidebarProps> = ({ song, onClose, onOpenVideo, onReuse, onSongUpdate, onNavigateToProfile, onNavigateToSong, isLiked, onToggleLike, onDelete, onAddToPlaylist, onPlay, isPlaying, currentSong }) => {
     const { token, user } = useAuth();
     const { t } = useI18n();
@@ -71,12 +75,12 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({ song, onClose, onOpe
     const saveTitleEdit = async () => {
         if (!song) return;
         if (!token) {
-            setTitleError('Please sign in to rename.');
+            setTitleError('Please log in before renaming');
             return;
         }
         const trimmed = titleDraft.trim();
         if (!trimmed) {
-            setTitleError('Title cannot be empty.');
+            setTitleError('Title is required');
             return;
         }
         if (trimmed === song.title) {
@@ -209,7 +213,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({ song, onClose, onOpe
                                                     cancelTitleEdit();
                                                 }
                                             }}
-                                            className="w-full text-xl font-bold text-zinc-900 dark:text-white bg-white dark:bg-black/30 border border-zinc-200 dark:border-white/10 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-pink-500/40"
+                                            className="vs-accent-focus w-full text-xl font-bold text-zinc-900 dark:text-white bg-white dark:bg-black/30 border border-zinc-200 dark:border-white/10 rounded-lg px-3 py-2"
                                             maxLength={120}
                                             autoFocus
                                         />
@@ -217,7 +221,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({ song, onClose, onOpe
                                             <button
                                                 onClick={() => void saveTitleEdit()}
                                                 disabled={isSavingTitle}
-                                                className="px-3 py-1.5 rounded-md text-xs font-semibold bg-pink-600 text-white hover:bg-pink-700 disabled:opacity-60"
+                                                className="vs-gradient-button px-3 py-1.5 rounded-md text-xs font-semibold text-white disabled:opacity-60"
                                             >
                                                 {isSavingTitle ? t('saving') : t('save')}
                                             </button>
@@ -243,7 +247,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({ song, onClose, onOpe
                                             startTitleEdit();
                                         }}
                                         className="text-zinc-400 hover:text-black dark:hover:text-white p-1 mr-1"
-                                        title="Rename song"
+                                        title="Rename"
                                     >
                                         <Edit3 size={18} />
                                     </button>
@@ -272,17 +276,14 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({ song, onClose, onOpe
                         </div>
 
                         <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-xs font-bold text-white shadow-sm ring-2 ring-white dark:ring-black">
-                                {song.creator ? song.creator[0].toUpperCase() : 'A'}
+                            <div className="vs-gradient-icon w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white shadow-sm ring-2 ring-white dark:ring-black">
+                                {getSongArtistName(song)[0].toUpperCase()}
                             </div>
                             <div className="flex flex-col">
-                                <span
-                                    onClick={() => song.creator && onNavigateToProfile?.(song.creator)}
-                                    className="text-sm font-semibold text-zinc-900 dark:text-white hover:underline cursor-pointer"
-                                >
-                                    {song.creator || t('anonymous')}
+                                <span className="text-sm font-semibold text-zinc-900 dark:text-white">
+                                    {getSongArtistName(song)}
                                 </span>
-                                <p className="text-xs text-zinc-500">{t('created')} {new Date(song.createdAt).toLocaleDateString()}</p>
+                                <p className="text-xs text-zinc-500">{t('created')} {new Date(song.createdAt).toLocaleDateString('zh-CN')}</p>
                             </div>
                         </div>
                     </div>
@@ -372,7 +373,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({ song, onClose, onOpe
                         <div className="space-y-3">
                             <div className="flex items-center gap-2 text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">
                                 <LinkIcon size={14} />
-                                Sources
+                                Source audio
                             </div>
                             <div className="space-y-2">
                                 {song.generationParams?.referenceAudioUrl && (
@@ -380,7 +381,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({ song, onClose, onOpe
                                         <div className="flex items-center gap-2 min-w-0">
                                             <Music size={14} className="text-zinc-400" />
                                             <div className="min-w-0">
-                                                <div className="text-xs text-zinc-500">Reference</div>
+                                                <div className="text-xs text-zinc-500">Reference audio</div>
                                                 <div className="text-sm font-medium text-zinc-900 dark:text-white truncate">
                                                     {song.generationParams?.referenceAudioTitle || getSourceLabel(song.generationParams?.referenceAudioUrl)}
                                                 </div>
@@ -394,7 +395,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({ song, onClose, onOpe
                                                         id: `ref_${song.id}`,
                                                         title: song.generationParams?.referenceAudioTitle || getSourceLabel(song.generationParams?.referenceAudioUrl),
                                                         lyrics: '',
-                                                        style: 'Reference',
+                                                        style: 'Reference audio',
                                                         coverUrl: song.coverUrl,
                                                         duration: '0:00',
                                                         createdAt: new Date(),
@@ -416,7 +417,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({ song, onClose, onOpe
                                         <div className="flex items-center gap-2 min-w-0">
                                             <Layers size={14} className="text-zinc-400" />
                                             <div className="min-w-0">
-                                                <div className="text-xs text-zinc-500">Cover</div>
+                                                <div className="text-xs text-zinc-500">Source audio</div>
                                                 <div className="text-sm font-medium text-zinc-900 dark:text-white truncate">
                                                     {song.generationParams?.sourceAudioTitle || getSourceLabel(song.generationParams?.sourceAudioUrl)}
                                                 </div>
@@ -430,7 +431,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({ song, onClose, onOpe
                                                         id: `cover_${song.id}`,
                                                         title: song.generationParams?.sourceAudioTitle || getSourceLabel(song.generationParams?.sourceAudioUrl),
                                                         lyrics: '',
-                                                        style: 'Cover',
+                                                        style: 'Source audio',
                                                         coverUrl: song.coverUrl,
                                                         duration: '0:00',
                                                         createdAt: new Date(),
@@ -527,7 +528,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({ song, onClose, onOpe
                         </div>
                         <div className="p-4 max-h-[300px] overflow-y-auto custom-scrollbar">
                             <div className="text-sm text-zinc-700 dark:text-zinc-300 font-mono whitespace-pre-wrap leading-relaxed opacity-90">
-                                {song.lyrics || <div className="text-zinc-400 dark:text-zinc-600 italic text-center py-8">Instrumental<br /><span className="text-xs not-italic">No lyrics generated</span></div>}
+                                {song.lyrics || <div className="text-zinc-400 dark:text-zinc-600 italic text-center py-8">No lyrics<br /><span className="text-xs not-italic">Lyrics will appear here after generation</span></div>}
                             </div>
                         </div>
                     </div>
@@ -549,7 +550,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({ song, onClose, onOpe
 const ActionButton: React.FC<{ icon: React.ReactNode; label?: string; active?: boolean; onClick?: () => void }> = ({ icon, label, active, onClick }) => (
     <button
         onClick={onClick}
-        className={`flex items-center gap-1.5 ${active ? 'text-pink-600 dark:text-pink-500' : 'text-zinc-400'} hover:text-black dark:hover:text-white transition-colors`}
+        className={`flex items-center gap-1.5 ${active ? 'vs-accent-text' : 'text-zinc-400'} hover:text-black dark:hover:text-white transition-colors`}
     >
         {icon}
         {label && <span className="text-xs font-semibold">{label}</span>}

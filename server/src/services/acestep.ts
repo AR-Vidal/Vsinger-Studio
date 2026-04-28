@@ -26,7 +26,132 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const AUDIO_DIR = path.join(__dirname, '../../public/audio');
 
-const ACESTEP_API = config.acestep.apiUrl;
+function normalizeAceStepApiBase(url: string): string {
+  const trimmed = url.replace(/\/+$/, '');
+  return trimmed.endsWith('/gradio_api')
+    ? trimmed.slice(0, -'/gradio_api'.length)
+    : trimmed;
+}
+
+const ACESTEP_API = normalizeAceStepApiBase(config.acestep.apiUrl);
+
+async function postAceStepJsonViaPowerShell<T>(
+  endpoint: string,
+  body: Record<string, unknown>,
+): Promise<T> {
+  const tempDir = path.join(__dirname, '../../tmp');
+  const tempJsonPath = path.join(
+    tempDir,
+    `acestep-${Date.now()}-${Math.random().toString(36).slice(2)}.json`,
+  );
+  const tempScriptPath = path.join(
+    tempDir,
+    `acestep-${Date.now()}-${Math.random().toString(36).slice(2)}.ps1`,
+  );
+
+  await mkdir(tempDir, { recursive: true });
+  await writeFile(tempJsonPath, JSON.stringify(body), 'utf8');
+  await writeFile(
+    tempScriptPath,
+    [
+      "param(",
+      "  [string]$JsonPath,",
+      "  [string]$Url",
+      ")",
+      "$ErrorActionPreference = 'Stop'",
+      "$raw = [System.IO.File]::ReadAllText($JsonPath, [System.Text.Encoding]::UTF8)",
+      "$obj = $raw | ConvertFrom-Json",
+      "$json = $obj | ConvertTo-Json -Depth 100 -Compress",
+      "$resp = Invoke-RestMethod -Uri $Url -Method Post -ContentType 'application/json' -Body $json",
+      "$resp | ConvertTo-Json -Depth 50 -Compress",
+    ].join('\n'),
+    'utf8',
+  );
+
+  try {
+    const output = await new Promise<string>((resolve, reject) => {
+      const child = spawn(
+        'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
+        [
+          '-NoProfile',
+          '-File',
+          tempScriptPath,
+          '-JsonPath',
+          tempJsonPath,
+          '-Url',
+          `${ACESTEP_API}${endpoint}`,
+        ],
+        { windowsHide: true },
+      );
+
+      let stdout = '';
+      let stderr = '';
+
+      child.stdout.on('data', (chunk) => {
+        stdout += chunk.toString();
+      });
+
+      child.stderr.on('data', (chunk) => {
+        stderr += chunk.toString();
+      });
+
+      child.on('error', reject);
+      child.on('close', (code) => {
+        if (code === 0) {
+          resolve(stdout.trim());
+          return;
+        }
+        reject(new Error(stderr.trim() || `PowerShell exited with code ${code}`));
+      });
+    });
+
+    try {
+      return JSON.parse(output) as T;
+    } catch (error) {
+      throw new Error(`PowerShell returned non-JSON output: ${output.slice(0, 500)}`, { cause: error });
+    }
+  } finally {
+    await rm(tempJsonPath, { force: true }).catch(() => undefined);
+    await rm(tempScriptPath, { force: true }).catch(() => undefined);
+  }
+}
+
+async function postAceStepJson<T>(
+  endpoint: string,
+  body: Record<string, unknown>,
+): Promise<T> {
+  const url = `${ACESTEP_API}${endpoint}`;
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+    if (response.ok) {
+      return await response.json() as T;
+    }
+
+    const message = await response.text().catch(() => '');
+    if (process.platform === 'win32') {
+      try {
+        return await postAceStepJsonViaPowerShell<T>(endpoint, body);
+      } catch (psError) {
+        throw new Error(
+          `ACE-Step request failed via fetch (${response.status} ${message}) and PowerShell fallback (${(psError as Error).message})`,
+        );
+      }
+    }
+
+    throw new Error(`ACE-Step request failed: ${response.status} ${message}`.trim());
+  } catch (error) {
+    if (process.platform === 'win32') {
+      return await postAceStepJsonViaPowerShell<T>(endpoint, body);
+    }
+    throw error;
+  }
+}
 
 // Resolve ACE-Step path (from env or default relative path)
 function resolveAceStepPath(): string {
@@ -131,8 +256,7 @@ async function prepareAudioFile(audioUrl: string | undefined): Promise<unknown> 
  * Build the 50 positional arguments for the Gradio /generation_wrapper endpoint.
  */
 async function buildGradioArgs(params: GenerationParams): Promise<unknown[]> {
-  const caption = params.style || 'pop music';
-  const prompt = params.customMode ? caption : (params.songDescription || caption);
+  const prompt = buildPromptText(params);
   const lyrics = params.instrumental ? '' : (params.lyrics || '');
   const isThinking = params.thinking ?? false;
   const isEnhance = params.enhance ?? false;
@@ -177,31 +301,40 @@ async function buildGradioArgs(params: GenerationParams): Promise<unknown[]> {
     params.cfgIntervalEnd ?? 1.0,                                 // 23: CFG Interval End
     params.shift ?? 3.0,                                          // 24: Shift
     params.inferMethod || 'ode',                                  // 25: Inference Method
-    params.customTimesteps || '',                                 // 26: Custom Timesteps
-    params.audioFormat || 'mp3',                                  // 27: Audio Format
-    params.lmTemperature ?? 0.85,                                 // 28: LM Temperature
-    isThinking,                                                   // 29: Think
-    params.lmCfgScale ?? 2.0,                                    // 30: LM CFG Scale
-    params.lmTopK ?? 0,                                           // 31: LM Top-K
-    params.lmTopP ?? 0.9,                                         // 32: LM Top-P
-    params.lmNegativePrompt || 'NO USER INPUT',                   // 33: LM Negative Prompt
-    useCot ? (params.useCotMetas ?? true) : false,                // 34: CoT Metas
-    useCot ? (params.useCotCaption ?? true) : false,              // 35: CaptionRewrite
-    useCot ? (params.useCotLanguage ?? true) : false,             // 36: CoT Language
-    params.isFormatCaption ?? false,                              // 37: Is Format Caption State
-    params.constrainedDecodingDebug ?? false,                     // 38: Constrained Decoding Debug
-    params.allowLmBatch ?? true,                                  // 39: ParallelThinking
-    params.getScores ?? false,                                    // 40: Auto Score
-    params.getLrc ?? false,                                       // 41: Auto LRC (timestamped lyrics)
-    params.scoreScale ?? 0.5,                                     // 42: Quality Score Sensitivity (0.01-1.0)
-    params.lmBatchChunkSize ?? 8,                                 // 43: LM Batch Chunk Size
-    params.trackName || null,                                     // 44: Track Name
-    params.completeTrackClasses || [],                            // 45: Track Names
-    true,                                                         // 46: Enable Normalization (ACE-Step v1.5, default true)
-    -1.0,                                                         // 47: Normalization DB (ACE-Step v1.5, default -1.0)
-    0.0,                                                          // 48: Latent Shift (ACE-Step v1.5, default 0.0)
-    1.0,                                                          // 49: Latent Rescale (ACE-Step v1.5, default 1.0)
-    params.autogen ?? false,                                      // 50: AutoGen
+    'euler',                                                      // 26: Sampler Mode
+    0.0,                                                          // 27: Velocity Norm Threshold
+    0.0,                                                          // 28: Velocity EMA Factor
+    params.customTimesteps || '',                                 // 29: Custom Timesteps
+    params.audioFormat || 'mp3',                                  // 30: Audio Format
+    '128k',                                                       // 31: MP3 Bitrate
+    48000,                                                        // 32: MP3 Sample Rate
+    params.lmTemperature ?? 0.85,                                 // 33: LM Temperature
+    isThinking,                                                   // 34: Think
+    params.lmCfgScale ?? 2.0,                                     // 35: LM CFG Scale
+    params.lmTopK ?? 0,                                           // 36: LM Top-K
+    params.lmTopP ?? 0.9,                                         // 37: LM Top-P
+    params.lmNegativePrompt || 'NO USER INPUT',                   // 38: LM Negative Prompt
+    useCot ? (params.useCotMetas ?? true) : false,                // 39: CoT Metas
+    useCot ? (params.useCotCaption ?? true) : false,              // 40: CaptionRewrite
+    useCot ? (params.useCotLanguage ?? true) : false,             // 41: CoT Language
+    params.isFormatCaption ?? false,                              // 42: Is Format Caption State
+    params.constrainedDecodingDebug ?? false,                     // 43: Constrained Decoding Debug
+    params.allowLmBatch ?? true,                                  // 44: ParallelThinking
+    params.getScores ?? false,                                    // 45: Auto Score
+    params.getLrc ?? false,                                       // 46: Auto LRC (timestamped lyrics)
+    params.scoreScale ?? 0.5,                                     // 47: Quality Score Sensitivity (0.01-1.0)
+    params.lmBatchChunkSize ?? 8,                                 // 48: LM Batch Chunk Size
+    params.trackName || null,                                     // 49: Track Name
+    params.completeTrackClasses || [],                            // 50: Track Names
+    true,                                                         // 51: Enable Normalization
+    -1.0,                                                         // 52: Normalization DB
+    0.0,                                                          // 53: Fade In Duration
+    0.0,                                                          // 54: Fade Out Duration
+    0.0,                                                          // 55: Latent Shift
+    1.0,                                                          // 56: Latent Rescale
+    'balanced',                                                   // 57: Repaint Mode
+    0.5,                                                          // 58: Repaint Strength
+    params.autogen ?? false,                                      // 59: AutoGen
     // Note: current_batch_index, total_batches, batch_queue, generation_params_state
     // are hidden Gradio state variables and must NOT be passed via client.predict()
   ];
@@ -322,6 +455,7 @@ export interface GenerationParams {
 
   // Model selection
   ditModel?: string;
+  singerGender?: 'female' | 'male' | null;
 }
 
 interface GenerationResult {
@@ -330,6 +464,9 @@ interface GenerationResult {
   bpm?: number;
   keyScale?: string;
   timeSignature?: string;
+  caption?: string;
+  lyrics?: string;
+  vocalLanguage?: string;
   status: string;
 }
 
@@ -365,6 +502,115 @@ setInterval(() => cleanupOldJobs(3600000), 600000);
 // Job queue for sequential processing (GPU can only handle one job at a time)
 const jobQueue: string[] = [];
 let isProcessingQueue = false;
+
+function buildPromptText(params: GenerationParams): string {
+  const singerGenderHint = !params.instrumental
+    ? (
+      params.singerGender === 'female'
+        ? 'female vocal lead'
+        : params.singerGender === 'male'
+          ? 'male vocal lead'
+          : null
+    )
+    : null;
+
+  const parts = [
+    params.songDescription?.trim(),
+    params.style?.trim(),
+    singerGenderHint,
+  ].filter((value): value is string => Boolean(value));
+
+  return parts.join(', ') || singerGenderHint || 'pop music';
+}
+
+function buildAutoLyricsSampleQuery(params: GenerationParams): string {
+  const base = buildPromptText(params).trim();
+  const languageHint = (() => {
+    switch (params.vocalLanguage) {
+      case 'zh':
+        return '必须使用简体中文汉字写歌词，禁止拼音，禁止英文，禁止日文';
+      case 'en':
+        return 'English lyrics only';
+      case 'ja':
+        return 'Japanese lyrics only';
+      case 'ko':
+        return 'Korean lyrics only';
+      case 'yue':
+        return '必须使用粤语中文歌词';
+      default:
+        return '有歌词';
+    }
+  })();
+
+  return [
+    base,
+    languageHint,
+    '人声演唱',
+    '非纯音乐',
+    '不要器乐曲',
+  ].filter(Boolean).join('，');
+}
+
+function shouldUseAutoLyricsMode(params: GenerationParams): boolean {
+  const taskType = params.taskType || 'text2music';
+  return (
+    taskType === 'text2music' &&
+    !params.instrumental &&
+    !params.lyrics?.trim() &&
+    !params.referenceAudioUrl &&
+    !params.sourceAudioUrl &&
+    !params.audioCodes &&
+    Boolean(buildPromptText(params))
+  );
+}
+
+function buildQueryResultAudioUrl(file: string | undefined, fallbackUrl?: string): string {
+  if (file) return file;
+  if (fallbackUrl?.startsWith('http')) return fallbackUrl;
+  if (fallbackUrl) {
+    return `${ACESTEP_API}${fallbackUrl.startsWith('/') ? fallbackUrl : `/${fallbackUrl}`}`;
+  }
+  throw new Error('ACE-Step returned an audio item without a usable file path or URL');
+}
+
+interface AceStepQueryResultItem {
+  file?: string;
+  url?: string;
+  status?: number;
+  prompt?: string;
+  caption?: string;
+  lyrics?: string;
+  bpm?: number;
+  duration?: number;
+  keyscale?: string;
+  timesignature?: string;
+  metas?: {
+    bpm?: number;
+    duration?: number;
+    keyscale?: string;
+    timesignature?: string;
+  };
+}
+
+function getResultPrompt(item?: AceStepQueryResultItem): string {
+  return item?.caption?.trim() || item?.prompt?.trim() || '';
+}
+
+function getResultDuration(item?: AceStepQueryResultItem): number | undefined {
+  return item?.duration || item?.metas?.duration;
+}
+
+function getResultBpm(item?: AceStepQueryResultItem): number | undefined {
+  return item?.bpm || item?.metas?.bpm;
+}
+
+function getResultKeyScale(item?: AceStepQueryResultItem): string | undefined {
+  return item?.keyscale || item?.metas?.keyscale;
+}
+
+function getResultTimeSignature(item?: AceStepQueryResultItem): string | undefined {
+  return item?.timesignature || item?.metas?.timesignature;
+}
 
 // Health check - verify Gradio app is reachable
 export async function checkSpaceHealth(): Promise<boolean> {
@@ -472,6 +718,150 @@ export async function generateMusicViaAPI(params: GenerationParams): Promise<{ j
   return { jobId };
 }
 
+async function processGenerationViaRest(
+  jobId: string,
+  params: GenerationParams,
+  job: ActiveJob,
+): Promise<void> {
+  if (params.ditModel) {
+    job.stage = `Loading model ${params.ditModel}...`;
+    await switchModelIfNeeded(params.ditModel);
+  }
+
+  const useSampleMode = shouldUseAutoLyricsMode(params);
+  const descriptionQuery = useSampleMode ? buildAutoLyricsSampleQuery(params) : '';
+  const prompt = useSampleMode ? '' : buildPromptText(params);
+  const lyrics = params.instrumental ? '[Instrumental]' : (params.lyrics || '');
+
+  const requestBody: Record<string, unknown> = {
+    prompt,
+    lyrics,
+    sample_mode: useSampleMode,
+    sample_query: useSampleMode ? descriptionQuery : undefined,
+    duration: params.duration && params.duration > 0 ? params.duration : undefined,
+    bpm: params.bpm && params.bpm > 0 ? params.bpm : undefined,
+    key_scale: params.keyScale || undefined,
+    time_signature: params.timeSignature || undefined,
+    vocal_language: params.vocalLanguage || 'zh',
+    inference_steps: params.inferenceSteps ?? 8,
+    guidance_scale: params.guidanceScale ?? 7.0,
+    batch_size: Math.min(Math.max(params.batchSize ?? 1, 1), 8),
+    use_random_seed: params.randomSeed !== false,
+    seed: params.seed ?? -1,
+    audio_format: params.audioFormat || 'mp3',
+    lm_temperature: params.lmTemperature ?? 0.8,
+    lm_cfg_scale: params.lmCfgScale ?? 2.2,
+    lm_top_k: params.lmTopK ?? 0,
+    lm_top_p: params.lmTopP ?? 0.92,
+    lm_negative_prompt: params.lmNegativePrompt || 'NO USER INPUT',
+    thinking: params.thinking ?? false,
+  };
+
+  Object.keys(requestBody).forEach((key) => {
+    if (requestBody[key] === undefined) delete requestBody[key];
+  });
+
+  job.stage = useSampleMode
+    ? 'Generating lyrics and music via ACE-Step service...'
+    : 'Generating music via ACE-Step service...';
+
+  const releasePayload = await postAceStepJson<{
+    data?: { task_id?: string };
+    error?: string | null;
+  }>('/release_task', requestBody);
+
+  if (releasePayload.error) {
+    throw new Error(releasePayload.error);
+  }
+
+  const taskId = releasePayload.data?.task_id;
+  if (!taskId) {
+    throw new Error('ACE-Step REST generation did not return a task id');
+  }
+
+  const queryPayload = await postAceStepJson<{
+    data?: Array<{ task_id?: string; status?: number; result?: string }>;
+    error?: string | null;
+  }>('/query_result', { task_id_list: [taskId] });
+
+  if (queryPayload.error) {
+    throw new Error(queryPayload.error);
+  }
+
+  const taskResult = Array.isArray(queryPayload.data) ? queryPayload.data[0] : undefined;
+  if (!taskResult || taskResult.status !== 1 || !taskResult.result) {
+    throw new Error('ACE-Step did not return a completed generation result');
+  }
+
+  let resultItems: AceStepQueryResultItem[] = [];
+  try {
+    resultItems = JSON.parse(taskResult.result) as AceStepQueryResultItem[];
+  } catch {
+    throw new Error('ACE-Step returned an unreadable generation result payload');
+  }
+
+  if (!Array.isArray(resultItems) || resultItems.length === 0) {
+    throw new Error('ACE-Step returned an empty generation result set');
+  }
+
+  const audioUrls: string[] = [];
+  let actualDuration = 0;
+  const audioFormat = params.audioFormat ?? 'mp3';
+
+  for (const item of resultItems) {
+    const source = buildQueryResultAudioUrl(item.file, item.url);
+    const ext = source.includes('.flac') ? '.flac' : source.includes('.wav') ? '.wav' : `.${audioFormat}`;
+    const filename = `${jobId}_${audioUrls.length}${ext}`;
+    const destPath = path.join(AUDIO_DIR, filename);
+
+    await mkdir(path.dirname(destPath), { recursive: true });
+    const response = await getAudioStream(source);
+    if (!response.ok) {
+      throw new Error(`Failed to download ACE-Step audio result: ${response.status}`);
+    }
+
+    const buffer = Buffer.from(await response.arrayBuffer());
+    await writeFile(destPath, buffer);
+
+    if (audioUrls.length === 0) {
+      actualDuration = getAudioDuration(destPath);
+    }
+
+    audioUrls.push(`/audio/${filename}`);
+  }
+
+  const primary = resultItems[0];
+  const primaryDuration = getResultDuration(primary);
+  const generatedCaption = getResultPrompt(primary);
+  const generatedLyrics = primary?.lyrics?.trim() || '';
+  const finalDuration = actualDuration > 0
+    ? actualDuration
+    : (
+      (primaryDuration && primaryDuration > 0 ? Math.round(primaryDuration) : 0) ||
+      (params.duration || 0)
+    );
+
+  job.status = 'succeeded';
+  job.result = {
+    audioUrls,
+    duration: finalDuration,
+    bpm: getResultBpm(primary) || params.bpm,
+    keyScale: getResultKeyScale(primary) || params.keyScale,
+    timeSignature: getResultTimeSignature(primary) || params.timeSignature,
+    caption: generatedCaption || descriptionQuery || prompt,
+    lyrics: generatedLyrics || lyrics,
+    vocalLanguage: params.vocalLanguage,
+    status: 'succeeded',
+  };
+  job.rawResponse = {
+    releasePayload,
+    queryPayload,
+    mode: useSampleMode ? 'sample_mode_rest' : 'rest',
+    sampleQuery: descriptionQuery || undefined,
+  };
+  console.log(`Job ${jobId}: Completed via ACE-Step REST with ${audioUrls.length} audio files`);
+}
+
 // ---------------------------------------------------------------------------
 // processGeneration — Gradio primary, Python spawn fallback
 // ---------------------------------------------------------------------------
@@ -489,6 +879,15 @@ async function processGeneration(
     job.status = 'failed';
     job.error = `task_type='${params.taskType}' requires a source audio or audio codes`;
     return;
+  }
+
+  if (shouldUseAutoLyricsMode(params)) {
+    try {
+      await processGenerationViaRest(jobId, params, job);
+      return;
+    } catch (error) {
+      console.error(`Job ${jobId}: ACE-Step REST generation failed, falling back to Gradio/Python`, error);
+    }
   }
 
   // Try Gradio first
@@ -521,8 +920,7 @@ async function processGenerationViaGradio(
   const client = await getGradioClient();
   const args = await buildGradioArgs(params);
 
-  const caption = params.style || 'pop music';
-  const prompt = params.customMode ? caption : (params.songDescription || caption);
+  const prompt = buildPromptText(params);
 
   console.log(`Job ${jobId}: Using Gradio /generation_wrapper`, {
     prompt: prompt.slice(0, 50),
@@ -607,6 +1005,9 @@ async function processGenerationViaGradio(
     bpm: metas.bpm || params.bpm,
     keyScale: metas.keyScale || params.keyScale,
     timeSignature: metas.timeSignature || params.timeSignature,
+    caption: prompt,
+    lyrics: params.instrumental ? '[Instrumental]' : (params.lyrics || ''),
+    vocalLanguage: params.vocalLanguage,
     status: 'succeeded',
   };
   job.rawResponse = { genDetails, genStatus };
@@ -650,8 +1051,8 @@ async function processGenerationViaPython(
   params: GenerationParams,
   job: ActiveJob,
 ): Promise<void> {
-  const caption = params.style || 'pop music';
-  const prompt = params.customMode ? caption : (params.songDescription || caption);
+  const prompt = buildPromptText(params);
+  const autoLyricsQuery = shouldUseAutoLyricsMode(params) ? buildAutoLyricsSampleQuery(params) : '';
   const lyrics = params.instrumental ? '' : (params.lyrics || '');
 
   console.log(`Job ${jobId}: Using Python spawn (Gradio not available)`, {
@@ -709,7 +1110,9 @@ async function processGenerationViaPython(
     if (params.lmTopK !== undefined && params.lmTopK > 0) args.push('--lm-top-k', String(params.lmTopK));
     if (params.lmTopP !== undefined) args.push('--lm-top-p', String(params.lmTopP));
     if (params.lmNegativePrompt) args.push('--lm-negative-prompt', params.lmNegativePrompt);
-    // Note: --lm-backend and --lm-model are not supported by simple_generate.py
+    if (autoLyricsQuery) args.push('--sample-query', autoLyricsQuery);
+    if (params.lmBackend) args.push('--lm-backend', params.lmBackend);
+    if (params.lmModel) args.push('--lm-model-path', params.lmModel);
     if (params.useCotMetas === false) args.push('--no-cot-metas');
     if (params.useCotCaption === false) args.push('--no-cot-caption');
     if (params.useCotLanguage === false) args.push('--no-cot-language');
@@ -750,15 +1153,23 @@ async function processGenerationViaPython(
       console.warn(`Job ${jobId}: Failed to cleanup output dir`, cleanupError);
     }
 
-    const finalDuration = actualDuration > 0 ? actualDuration : (params.duration && params.duration > 0 ? params.duration : 0);
+    const finalDuration = actualDuration > 0
+      ? actualDuration
+      : (
+        (result.duration && result.duration > 0 ? result.duration : 0) ||
+        (params.duration && params.duration > 0 ? params.duration : 0)
+      );
 
     job.status = 'succeeded';
     job.result = {
       audioUrls,
       duration: finalDuration,
-      bpm: params.bpm,
-      keyScale: params.keyScale,
-      timeSignature: params.timeSignature,
+      bpm: result.bpm || params.bpm,
+      keyScale: result.key_scale || params.keyScale,
+      timeSignature: result.time_signature || params.timeSignature,
+      caption: result.caption || prompt,
+      lyrics: params.instrumental ? '[Instrumental]' : (result.lyrics || params.lyrics || ''),
+      vocalLanguage: result.vocal_language || params.vocalLanguage,
       status: 'succeeded',
     };
     job.rawResponse = result;
@@ -780,6 +1191,13 @@ interface PythonResult {
   success: boolean;
   audio_paths?: string[];
   elapsed_seconds?: number;
+  caption?: string;
+  lyrics?: string;
+  duration?: number;
+  bpm?: number;
+  key_scale?: string;
+  time_signature?: string;
+  vocal_language?: string;
   error?: string;
 }
 

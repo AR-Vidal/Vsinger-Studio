@@ -19,13 +19,13 @@ sys.path.insert(0, ACESTEP_PATH)
 
 from acestep.handler import AceStepHandler
 from acestep.llm_inference import LLMHandler
-from acestep.inference import GenerationParams, GenerationConfig, generate_music
+from acestep.inference import GenerationParams, GenerationConfig, generate_music, create_sample
 
 # Global handlers (initialized once)
 _handler = None
 _llm_handler = None
 
-def get_handlers():
+def get_handlers(need_lm: bool = False, lm_backend: str = "pt", lm_model_path: str | None = None):
     global _handler, _llm_handler
     if _handler is None:
         if torch.cuda.is_available():
@@ -41,7 +41,31 @@ def get_handlers():
             device=device,
             offload_to_cpu=True,  # For 12GB GPU
         )
-        _llm_handler = LLMHandler()  # Create but don't initialize (not enough VRAM)
+    if _llm_handler is None:
+        _llm_handler = LLMHandler()
+
+    if need_lm and not _llm_handler.llm_initialized:
+        available_lm_models = _llm_handler.get_available_5hz_lm_models()
+        selected_lm_model = lm_model_path or (available_lm_models[0] if available_lm_models else None)
+        if not selected_lm_model:
+            raise RuntimeError("No LM models available for automatic lyric generation")
+
+        if torch.cuda.is_available():
+            device = "cuda"
+        elif torch.backends.mps.is_available():
+            device = "mps"
+        else:
+            device = "cpu"
+
+        _llm_handler.initialize(
+            checkpoint_dir=os.path.join(ACESTEP_PATH, "checkpoints"),
+            lm_model_path=selected_lm_model,
+            backend=lm_backend,
+            device=device,
+            offload_to_cpu=True,
+            dtype=None,
+        )
+
     return _handler, _llm_handler
 
 def generate(
@@ -80,6 +104,9 @@ def generate(
     lm_top_k: int = 0,
     lm_top_p: float = 0.9,
     lm_negative_prompt: str = "",
+    sample_query: str = "",
+    lm_backend: str = "pt",
+    lm_model_path: str | None = None,
     use_cot_metas: bool = True,
     use_cot_caption: bool = True,
     use_cot_language: bool = True,
@@ -93,24 +120,64 @@ def generate(
     output_dir: str = None,
 ):
     """Generate music and return audio file paths."""
-    handler, llm_handler = get_handlers()
+    handler, llm_handler = get_handlers(
+        need_lm=bool(sample_query and not instrumental),
+        lm_backend=lm_backend,
+        lm_model_path=lm_model_path,
+    )
 
     if output_dir is None:
         output_dir = os.path.join(ACESTEP_PATH, "output")
     os.makedirs(output_dir, exist_ok=True)
 
+    resolved_prompt = prompt
+    resolved_lyrics = lyrics
+    resolved_instrumental = instrumental
+    resolved_duration = duration
+    resolved_bpm = bpm
+    resolved_key_scale = key_scale
+    resolved_time_signature = time_signature
+    resolved_vocal_language = vocal_language
+
+    if sample_query and not instrumental:
+        sample_result = create_sample(
+            llm_handler=llm_handler,
+            query=sample_query,
+            instrumental=False,
+            vocal_language=vocal_language if vocal_language and vocal_language not in {"auto", "unknown"} else None,
+            temperature=lm_temperature,
+            top_k=lm_top_k if lm_top_k > 0 else None,
+            top_p=lm_top_p if lm_top_p and lm_top_p < 1.0 else None,
+        )
+        if not sample_result.success:
+            raise RuntimeError(sample_result.error or sample_result.status_message or "create_sample failed")
+
+        resolved_prompt = sample_result.caption or resolved_prompt
+        resolved_lyrics = sample_result.lyrics or resolved_lyrics
+        resolved_instrumental = bool(getattr(sample_result, "instrumental", False))
+        if resolved_duration <= 0 and sample_result.duration:
+            resolved_duration = int(sample_result.duration)
+        if resolved_bpm <= 0 and sample_result.bpm:
+            resolved_bpm = int(sample_result.bpm)
+        if not resolved_key_scale and sample_result.keyscale:
+            resolved_key_scale = sample_result.keyscale
+        if not resolved_time_signature and sample_result.timesignature:
+            resolved_time_signature = sample_result.timesignature
+        if resolved_vocal_language in {"", "auto", "unknown"} and sample_result.language:
+            resolved_vocal_language = sample_result.language
+
     # Build generation params
     params = GenerationParams(
         # Basic
         task_type=task_type,
-        caption=prompt,
-        lyrics=lyrics if lyrics and not instrumental else "",
-        instrumental=instrumental,
-        duration=float(duration) if duration > 0 else -1.0,
-        bpm=bpm if bpm > 0 else None,
-        keyscale=key_scale if key_scale else "",
-        timesignature=time_signature if time_signature else "",
-        vocal_language=vocal_language if vocal_language else "auto",
+        caption=resolved_prompt,
+        lyrics=resolved_lyrics if resolved_lyrics and not resolved_instrumental else "",
+        instrumental=resolved_instrumental,
+        duration=float(resolved_duration) if resolved_duration > 0 else -1.0,
+        bpm=resolved_bpm if resolved_bpm > 0 else None,
+        keyscale=resolved_key_scale if resolved_key_scale else "",
+        timesignature=resolved_time_signature if resolved_time_signature else "",
+        vocal_language=resolved_vocal_language if resolved_vocal_language else "auto",
 
         # Generation
         inference_steps=infer_steps,
@@ -167,6 +234,13 @@ def generate(
         "audio_paths": audio_paths,
         "elapsed_seconds": elapsed,
         "output_dir": output_dir,
+        "caption": resolved_prompt,
+        "lyrics": "[Instrumental]" if resolved_instrumental else resolved_lyrics,
+        "duration": resolved_duration,
+        "bpm": resolved_bpm,
+        "key_scale": resolved_key_scale,
+        "time_signature": resolved_time_signature,
+        "vocal_language": resolved_vocal_language,
     }
 
 def main():
@@ -209,6 +283,9 @@ def main():
     parser.add_argument("--lm-top-k", type=int, default=0, help="LLM top-k sampling")
     parser.add_argument("--lm-top-p", type=float, default=0.9, help="LLM top-p sampling")
     parser.add_argument("--lm-negative-prompt", type=str, default="", help="LLM negative prompt")
+    parser.add_argument("--sample-query", type=str, default="", help="Auto-generate caption and lyrics from a description")
+    parser.add_argument("--lm-backend", type=str, default="pt", choices=["pt", "vllm", "mlx"], help="LM backend")
+    parser.add_argument("--lm-model-path", type=str, default=None, help="LM model path or name")
     parser.add_argument("--no-cot-metas", action="store_true", help="Disable CoT for metadata")
     parser.add_argument("--no-cot-caption", action="store_true", help="Disable CoT for caption")
     parser.add_argument("--no-cot-language", action="store_true", help="Disable CoT for language")
@@ -261,6 +338,9 @@ def main():
             lm_top_k=args.lm_top_k,
             lm_top_p=args.lm_top_p,
             lm_negative_prompt=args.lm_negative_prompt,
+            sample_query=args.sample_query,
+            lm_backend=args.lm_backend,
+            lm_model_path=args.lm_model_path,
             use_cot_metas=not args.no_cot_metas,
             use_cot_caption=not args.no_cot_caption,
             use_cot_language=not args.no_cot_language,

@@ -19,11 +19,16 @@ interface SongProfileProps {
     onDelete?: (song: Song) => void;
 }
 
+const getSongArtistName = (song: Song): string => (
+    song.singerName || song.singerNameSnapshot || 'Virtual Singer'
+);
+
 const updateMetaTags = (song: Song) => {
     const baseUrl = window.location.origin;
     const songUrl = `${baseUrl}/song/${song.id}`;
-    const title = `${song.title} by ${song.creator || 'Unknown Artist'} | ACE-Step UI`;
-    const description = `Listen to "${song.title}" - ${song.style}. ${song.viewCount || 0} plays, ${song.likeCount || 0} likes. Create your own AI music with ACE-Step UI.`;
+    const artistName = getSongArtistName(song);
+    const title = `${song.title} - ${artistName} | ACE-Step UI`;
+    const description = `Listen to "${song.title}" - ${song.style}. Plays: ${song.viewCount || 0}, likes: ${song.likeCount || 0}. Created with ACE-Step UI.`;
 
     document.title = title;
 
@@ -59,12 +64,12 @@ const updateMetaTags = (song: Song) => {
     updateOrCreateMeta('meta[name="twitter:image"]', 'content', song.coverUrl);
 
     updateOrCreateMeta('meta[property="music:duration"]', 'content', String(song.duration || 0));
-    updateOrCreateMeta('meta[property="music:musician"]', 'content', song.creator || 'Unknown Artist');
+    updateOrCreateMeta('meta[property="music:musician"]', 'content', artistName);
 };
 
 const resetMetaTags = () => {
     document.title = 'ACE-Step UI - Local AI Music Generator';
-    const defaultDescription = 'Create original music with AI locally. Generate songs in any style with custom lyrics and professional quality using ACE-Step.';
+    const defaultDescription = 'Create original AI music locally with custom lyrics, styles, and high-quality generation.';
     const defaultImage = '/og-image.png';
 
     const updateMeta = (selector: string, content: string) => {
@@ -128,6 +133,10 @@ export const SongProfile: React.FC<SongProfileProps> = ({ songId, onBack, onPlay
                 userId: response.song.user_id,
                 creator: response.song.creator,
                 creator_avatar: response.song.creator_avatar,
+                singerId: response.song.singer_id || null,
+                singerName: response.song.singer_name || response.song.singer_name_snapshot || null,
+                singerNameSnapshot: response.song.singer_name_snapshot || null,
+                hasSinger: Boolean(response.song.has_singer),
             };
 
             setSong(transformedSong);
@@ -177,17 +186,12 @@ export const SongProfile: React.FC<SongProfileProps> = ({ songId, onBack, onPlay
                         <h1 className="text-2xl md:text-3xl font-bold text-zinc-900 dark:text-white mb-2">{song.title}</h1>
                         <div className="flex items-center gap-3 mb-3">
                             <div
-                                onClick={() => song.creator && onNavigateToProfile(song.creator)}
-                                className="flex items-center gap-2 cursor-pointer hover:underline"
+                                className="flex items-center gap-2"
                             >
                                 <div className="w-6 h-6 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-xs font-bold text-white overflow-hidden">
-                                    {song.creator_avatar ? (
-                                        <img src={song.creator_avatar} alt={song.creator || 'Creator'} className="w-full h-full object-cover" />
-                                    ) : (
-                                        song.creator ? song.creator[0].toUpperCase() : 'A'
-                                    )}
+                                    {getSongArtistName(song)[0].toUpperCase()}
                                 </div>
-                                <span className="text-zinc-900 dark:text-white font-semibold">{song.creator || 'Anonymous'}</span>
+                                <span className="text-zinc-900 dark:text-white font-semibold">{getSongArtistName(song)}</span>
                             </div>
                         </div>
 
@@ -201,7 +205,7 @@ export const SongProfile: React.FC<SongProfileProps> = ({ songId, onBack, onPlay
                         </div>
 
                         <div className="text-xs text-zinc-500">
-                            {new Date(song.createdAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })} at {new Date(song.createdAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                            Created at {new Date(song.createdAt).toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })} {new Date(song.createdAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
                             {!song.isPublic && song.userId === user?.id && (
                                 <span className="ml-2 px-2 py-0.5 bg-zinc-200 dark:bg-zinc-800 rounded text-xs text-zinc-600 dark:text-zinc-400">Private</span>
                             )}
@@ -211,13 +215,13 @@ export const SongProfile: React.FC<SongProfileProps> = ({ songId, onBack, onPlay
                     {/* Related Songs Tab - Hidden on mobile */}
                     <div className="hidden md:flex items-center gap-2">
                         <button className="px-4 py-2 bg-zinc-900 dark:bg-white text-white dark:text-black rounded-full text-sm font-semibold">
-                            Similar
+                            Similar songs
                         </button>
                         <button
-                            onClick={() => song.creator && onNavigateToProfile(song.creator)}
+                            onClick={() => {}}
                             className="px-4 py-2 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white text-sm font-semibold transition-colors"
                         >
-                            By {song.creator || 'Artist'}
+                            {getSongArtistName(song)} songs
                         </button>
                     </div>
                 </div>

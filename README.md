@@ -1,518 +1,462 @@
-<p align="center">
-  <img src="https://img.shields.io/badge/🎵-ACE--Step_UI-ff69b4?style=for-the-badge&labelColor=1a1a1a" alt="ACE-Step UI" height="60">
-</p>
+# ACE-Step 虚拟歌手生成平台
 
-<h1 align="center">ACE-Step UI</h1>
+这是当前项目应用层的说明文档。
 
-<p align="center">
-  <strong>The Ultimate Open Source Suno Alternative</strong><br>
-  <em>Seamless integration with <a href="https://github.com/ace-step/ACE-Step-1.5">ACE-Step 1.5</a> - The Open Source AI Music Generation Model</em>
-</p>
+当前版本的重点已经从“手动 LoRA 面板”转成了“虚拟歌手平台”：
 
-<p align="center">
-  <a href="https://www.youtube.com/@Ambsd-yy7os">
-    <img src="https://img.shields.io/badge/▶_Subscribe-YouTube-FF0000?style=for-the-badge&logo=youtube" alt="Subscribe on YouTube">
-  </a>
-  <a href="https://x.com/AmbsdOP">
-    <img src="https://img.shields.io/badge/Follow-@AmbsdOP-1DA1F2?style=for-the-badge&logo=x&logoColor=white" alt="Follow on X">
-  </a>
-</p>
+- `创作`
+- `音乐库`
+- `管理`
+- `训练`
 
-<p align="center">
-  <a href="#-demo">Demo</a> •
-  <a href="#-why-ace-step-ui">Why ACE-Step</a> •
-  <a href="#-features">Features</a> •
-  <a href="#-installation">Installation</a> •
-  <a href="#-usage">Usage</a> •
-  <a href="#-contributing">Contributing</a>
-</p>
-
-<p align="center">
-  <img src="https://img.shields.io/badge/React-18.3-61DAFB?style=flat-square&logo=react" alt="React">
-  <img src="https://img.shields.io/badge/TypeScript-5.x-3178C6?style=flat-square&logo=typescript" alt="TypeScript">
-  <img src="https://img.shields.io/badge/TailwindCSS-3.x-06B6D4?style=flat-square&logo=tailwindcss" alt="TailwindCSS">
-  <img src="https://img.shields.io/badge/SQLite-Local_First-003B57?style=flat-square&logo=sqlite" alt="SQLite">
-  <img src="https://img.shields.io/badge/License-MIT-green?style=flat-square" alt="License">
-  <img src="https://img.shields.io/github/stars/fspecii/ace-step-ui?style=flat-square" alt="Stars">
-</p>
+其中“虚拟歌手”是核心实体，训练得到的音色通过绑定关系接入创作流程，前端不再让用户手动输入 LoRA 路径。
 
 ---
 
-## 🎬 Demo
+## 当前功能
 
-<p align="center">
-  <a href="https://www.youtube.com/watch?v=8zg0Xi36qGc">
-    <img src="https://img.shields.io/badge/▶_Watch_Full_Demo-YouTube-FF0000?style=for-the-badge&logo=youtube" alt="Watch Demo on YouTube">
-  </a>
-</p>
+### 1. 创作
 
-<p align="center">
-  <img src="docs/demo.gif" alt="ACE-Step UI - Open Source Suno Alternative" width="100%">
-</p>
+- 中文界面
+- 纯音乐 / 人声一键切换
+- 人声生成时可选择已绑定音色的虚拟歌手
+- 纯音乐模式不要求选择歌手
+- 保留高级控制区：
+  - 标题
+  - 歌词
+  - 参考音频
+  - 源音频
+  - 专家参数
 
-<p align="center">
-  <em>Generate professional AI music with a Spotify-like interface - 100% free and local</em>
-</p>
+### 2. 音乐库
 
----
+- 搜索已并入音乐库
+- 支持按歌曲名和歌手名搜索
+- 列表显示歌手快照名
+- 保留：
+  - 全部歌曲
+  - 喜欢
+  - 歌单
 
-## 🚀 Why ACE-Step UI?
+### 3. 管理
 
-**Tired of paying $10+/month for Suno or Udio?** ACE-Step 1.5 is the **open source Suno killer** that runs locally on your own GPU - and ACE-Step UI gives you a **beautiful, professional interface** to harness its full power.
+- 以列表方式维护虚拟歌手基础信息
+- 支持增删改查
+- 字段包括：
+  - 姓名
+  - 曲风标签
+  - 默认语言
+  - 角色设定
+  - 备注
+  - 头像 URL
 
-| Feature | Suno/Udio | ACE-Step UI |
-|---------|-----------|-------------|
-| **Cost** | $10-50/month | **FREE forever** |
-| **Privacy** | Cloud-based | **100% local** |
-| **Ownership** | Licensed | **You own everything** |
-| **Customization** | Limited | **Full control** |
-| **Queue Limits** | Restricted | **Unlimited** |
-| **Commercial Use** | Expensive tiers | **No restrictions** |
+### 4. 训练
 
-### What Makes ACE-Step 1.5 Special?
+- 上传训练音频
+- 构建数据集 JSON
+- 样本预览与编辑
+- 预处理
+- 启动训练
+- 导出音色
+- 绑定到已有歌手
+- 跳转管理页新建歌手后自动绑定
 
-- **State-of-the-art quality** rivaling commercial services
-- **Full song generation** up to 4+ minutes with vocals
-- **Runs locally** - no internet required after setup
-- **Open source** - inspect, modify, improve
-- **Active development** - constant improvements
+当前约束：
 
----
-
-## ✨ Features
-
-### 🎵 AI Music Generation
-| Feature | Description |
-|---------|-------------|
-| **Full Song Generation** | Create complete songs with vocals and lyrics up to 4+ minutes |
-| **Instrumental Mode** | Generate instrumental tracks without vocals |
-| **Custom Mode** | Fine-tune BPM, key, time signature, and duration |
-| **Style Tags** | Define genre, mood, tempo, and instrumentation |
-| **Batch Generation** | Generate multiple variations at once |
-| **AI Enhance** | Enrich genre tags into detailed captions with proper BPM/key/time |
-| **Thinking Mode** | Let AI reason about structure and generate audio codes |
-
-### 🎨 Advanced Parameters
-| Feature | Description |
-|---------|-------------|
-| **Reference Audio** | Use any audio file as a style reference |
-| **Audio Cover** | Transform existing audio with new styles |
-| **Repainting** | Regenerate specific sections of a track |
-| **Seed Control** | Reproduce exact generations for consistency |
-| **Inference Steps** | Control quality vs speed tradeoff |
-
-### 🎤 Lyrics & Prompts
-| Feature | Description |
-|---------|-------------|
-| **Lyrics Editor** | Write and format lyrics with structure tags |
-| **Format Assistant** | AI-powered caption and lyrics formatting |
-| **Prompt Templates** | Quick-start with genre presets |
-| **Reuse Prompts** | Clone settings from any previous generation |
-
-### 🎧 Professional Interface
-| Feature | Description |
-|---------|-------------|
-| **Spotify-Inspired UI** | Clean, modern design with dark/light mode |
-| **Bottom Player** | Full-featured player with waveform and progress |
-| **Library Management** | Browse, search, and organize all your tracks |
-| **Likes & Playlists** | Organize favorites into custom playlists |
-| **Real-time Progress** | Live generation progress with queue position |
-| **LAN Access** | Use from any device on your local network |
-
-### 🛠️ Built-in Tools
-| Feature | Description |
-|---------|-------------|
-| **Audio Editor** | Trim, fade, and apply effects with AudioMass |
-| **Stem Extraction** | Separate vocals, drums, bass, and other with Demucs |
-| **Video Generator** | Create music videos with Pexels backgrounds |
-| **Gradient Covers** | Beautiful procedural album art (no internet needed) |
+- 一个歌手只能保留一条当前生效音色
+- 新音色绑定成功后，会替换旧绑定
 
 ---
 
-## 💻 Tech Stack
+## 新手测试数据集指南
 
-| Layer | Technologies |
-|-------|-------------|
-| **Frontend** | React 18, TypeScript, TailwindCSS, Vite |
-| **Backend** | Express.js, SQLite, better-sqlite3 |
-| **AI Engine** | [ACE-Step 1.5](https://github.com/ace-step/ACE-Step-1.5) (Gradio API) |
-| **Audio Tools** | AudioMass, Demucs, FFmpeg |
+如果你之前没做过 LoRA 训练，建议先做“最小可验证数据集”，目标不是一步到位，而是先确认流程跑通。
+
+### 最推荐的新手测试集
+
+- 单一歌手
+- `15 到 30` 条切片
+- 总时长 `10 到 20` 分钟
+- 每条 `8 到 20` 秒
+- 干净独唱
+- 发音清晰
+- 伴奏轻或已分离人声
+
+### 训练效果最关键的不是“多”，而是“干净”
+
+优先保证这些条件：
+
+- 不混入第二个声音
+- 不要有明显观众声或环境噪声
+- 不要把整首混音歌曲直接全塞进去
+- 不要把说话、唱歌、直播、采访混成一套数据
+
+### 对这个项目最友好的文件组织方式
+
+训练接口当前支持：
+
+- `.wav`
+- `.mp3`
+- `.flac`
+- `.ogg`
+- `.opus`
+
+推荐目录示例：
+
+```text
+my_test_dataset/
+  001.wav
+  001.txt
+  002.wav
+  002.txt
+  003.wav
+  003.txt
+```
+
+说明：
+
+- `.txt` 文件和音频同名
+- 文本内容写这一小段音频实际对应的歌词
+- 如果没有 `.txt`，人声样本的可读性和后续整理会差很多
+
+### 最容易上手的素材来源
+
+推荐顺序：
+
+1. 自己录一组人声
+2. 自己拥有版权或授权的清唱素材
+3. 从完整歌曲中先做人声分离，再手动筛出干净片段
+
+如果你只是为了测试项目工作流，自己录音通常是最快、最干净、最容易验证结果的一种方式。
 
 ---
 
-## 📋 Requirements
+## 新手训练教程
 
-| Requirement | Specification |
-|-------------|---------------|
-| **Node.js** | 18 or higher |
-| **Python** | 3.10+ (3.11 recommended) OR Windows Portable Package |
-| **NVIDIA GPU** | 4GB+ VRAM (works without LLM), 12GB+ recommended (with LLM) |
-| **CUDA** | 12.8 (for Windows Portable Package) |
-| **FFmpeg** | For audio processing |
-| **uv** | Python package manager (recommended for standard install) |
+### 第 1 步：先新建歌手
 
----
+进入 `管理` 页面，先创建一个虚拟歌手。
 
-## ⚡ Quick Start
+建议至少填写：
 
-### 🎯 Pinokio - 1-Click Install (Recommended for All Users!)
+- 姓名
+- 曲风标签
+- 默认语言
+- 角色设定
 
-The easiest way to get ACE-Step UI up and running on **any platform** — no terminal, no manual setup:
+### 第 2 步：准备音频和歌词
 
-<p align="center">
-  <a href="https://beta.pinokio.co/apps/github-com-cocktailpeanut-ace-step-ui-pinokio">
-    <img src="https://img.shields.io/badge/⚡_Install_with_Pinokio-One_Click-ff69b4?style=for-the-badge&labelColor=1a1a1a" alt="Install with Pinokio" height="50">
-  </a>
-</p>
+第一次建议这样准备：
 
-> **[Pinokio](https://pinokio.computer)** handles everything automatically: Python, Node.js, dependencies, model downloads, and launching. Just click install and start making music.
+- `20` 条左右音频
+- 每条 `10 到 15` 秒
+- 同一个歌手
+- 同一种主要语言
+- 每条对应一份 `.txt`
 
----
+### 第 3 步：进入训练页上传音频
 
-### 🪟 Windows - One-Click Start (Easiest!)
-```batch
-cd ace-step-ui
-start-all.bat
-```
-**That's it!** This starts everything: API + Backend + Frontend in one command.
+在 `训练 -> 数据集` 中：
 
-> **Note:** By default, it looks for ACE-Step in `..\ACE-Step-1.5`.
-> If yours is elsewhere, set `ACESTEP_PATH` first:
-> ```batch
-> set ACESTEP_PATH=C:\path\to\ACE-Step-1.5
-> start-all.bat
-> ```
+1. 输入数据集名称
+2. 选择音频文件
+3. 点击“上传并构建”
 
-### 🪟 Windows - Manual Start
-```batch
-REM 1. Start ACE-Step Gradio (with API endpoints)
-cd C:\ACE-Step-1.5
-python_embeded\python -m acestep --port 8001 --enable-api --backend pt --server-name 127.0.0.1
+系统会：
 
-REM 2. Start ACE-Step UI (in another terminal)
-cd ace-step-ui
-start.bat
-```
+- 保存音频
+- 扫描数据集
+- 生成 JSON
+- 返回第一条样本预览
 
-### Linux / macOS - One-Click Start (Easiest!)
-```bash
-cd ace-step-ui
-./start-all.sh
-```
-**That's it!** This starts everything: Gradio + Backend + Frontend in one command.
+### 第 4 步：检查样本
 
-> **Note:** By default, it looks for ACE-Step in `../ACE-Step-1.5`.
-> If yours is elsewhere, set `ACESTEP_PATH` first:
-> ```bash
-> export ACESTEP_PATH=/path/to/ACE-Step-1.5
-> ./start-all.sh
-> ```
-> **To stop:** `./stop-all.sh`
+在样本预览阶段重点看：
 
-### Linux / macOS - Manual Start
-```bash
-# 1. Start ACE-Step Gradio with API (in ACE-Step-1.5 directory)
-cd /path/to/ACE-Step-1.5
-uv run acestep --port 8001 --enable-api --backend pt --server-name 127.0.0.1
+- 文件名是否对应正确
+- 歌词有没有错位
+- 有没有误把人声当器乐
+- 有没有混进脏样本
 
-# 2. Start ACE-Step UI (in another terminal)
-cd ace-step-ui
-./start.sh
-```
+### 第 5 步：开始预处理
 
-### Windows (Standard Installation)
-```batch
-REM 1. Start ACE-Step Gradio with API (in ACE-Step-1.5 directory)
-cd C:\path\to\ACE-Step-1.5
-uv run acestep --port 8001 --enable-api --backend pt --server-name 127.0.0.1
+预处理会把音频转换成训练阶段可直接使用的中间数据。
 
-REM 2. Start ACE-Step UI (in another terminal)
-cd ace-step-ui
-start.bat
-```
+### 第 6 步：先跑一轮小训练
 
-Open **http://localhost:3000** and start creating!
+第一次只做烟雾测试，建议：
+
+- `rank`: 32 或 64
+- `alpha`: 64 或 128
+- `dropout`: 0.05 到 0.1
+- `learningRate`: 0.0003
+- `batchSize`: 1
+- `epochs`: 200 到 500
+- `saveEvery`: 100 到 200
+
+如果只是为了看系统是否工作正常，这样已经够用。
+
+### 第 7 步：导出并绑定
+
+训练完成后：
+
+1. 点击导出
+2. 选择已有歌手并绑定
+3. 如果歌手已有旧音色，确认覆盖即可
+
+也可以：
+
+1. 从训练页点击“去管理页新建并自动绑定”
+2. 新建歌手
+3. 保存后自动绑定刚导出的结果
+
+### 第 8 步：回到创作页验证
+
+建议用最短路径验证：
+
+1. 进入 `创作`
+2. 关闭纯音乐模式
+3. 选择已绑定歌手
+4. 写一段简单中文提示词
+5. 先生成 `30 到 60` 秒
+
+如果你能明显听出这位歌手的音色倾向，说明训练和绑定已经接通了。
 
 ---
 
-## 📦 Installation
+## 常见失败原因
 
-### 1. Install ACE-Step (The AI Engine)
+### 数据太杂
 
-#### 🪟 Windows Portable Package (Recommended for Windows)
+多歌手、多场景、多语言一起混，会让音色变脏。
 
-**The easiest way to get started on Windows!** This package includes everything pre-configured:
+### 样本太长
 
-1. **Download** [ACE-Step-1.5.7z](https://files.acemusic.ai/acemusic/win/ACE-Step-1.5.7z) (~5GB)
-2. **Extract** to `C:\ACE-Step-1.5` (or your preferred location)
-3. **Done!** The package includes `python_embeded` with all dependencies
+长音频会增加整理难度，新手更适合先切成短片段。
 
-✅ **Works with 4GB GPU** - No LLM installation required
-✅ **CUDA 12.8** included
-✅ **Zero setup hassle**
+### 歌词缺失
 
-> **Note:** Thinking Mode (LLM features) is automatically disabled on GPUs with <12GB VRAM. You can still enable it manually if you have 12GB+.
+没有 `.txt` 对齐歌词时，样本检查和后续修正成本会明显升高。
 
-#### Standard Installation (All Platforms)
+### 一开始就训练很久
 
-```bash
-# Clone ACE-Step 1.5 - the open source Suno alternative
-git clone https://github.com/ace-step/ACE-Step-1.5
-cd ACE-Step-1.5
+第一次先做小训练，确认链路无误再扩大规模。
 
-# Create virtual environment and install
-uv venv
-uv pip install -e .
+---
 
-# Models download automatically on first run (~5GB)
-cd ..
-```
+## 开发启动
 
-### 2. Install ACE-Step UI (This Repository)
+### 前置要求
 
-#### Linux / macOS
-```bash
-# Clone the UI
-git clone https://github.com/fspecii/ace-step-ui
-cd ace-step-ui
+- Node.js 18+
+- Python 3.11
+- `uv`
+- FFmpeg
+- 可运行的 ACE-Step 1.5 环境
 
-# Run setup script (installs all dependencies)
-./setup.sh
-```
+### 1. 启动 ACE-Step API
 
-#### Windows
-```batch
-REM Clone the UI
-git clone https://github.com/fspecii/ace-step-ui
-cd ace-step-ui
-
-REM Run setup script (installs all dependencies)
-setup.bat
-```
-
-#### Manual Installation (All Platforms)
+示例：
 
 ```bash
-# Install frontend dependencies
+acestep --port 8001 --enable-api --backend pt --server-name 127.0.0.1
+```
+
+### 2. 启动后端
+
+```bash
+cd app/server
 npm install
+npm run db:migrate
+npm run dev
+```
 
-# Install server dependencies
-cd server
+### 3. 启动前端
+
+```bash
+cd app
 npm install
-cd ..
-
-# Copy environment file
-# Linux/macOS:
-cp server/.env.example server/.env
-# Windows:
-copy server\.env.example server\.env
+npm run dev
 ```
+
+默认开发地址：
+
+- 前端：`http://127.0.0.1:3000`
+- 后端：`http://127.0.0.1:3001`
 
 ---
 
-## 🎮 Usage
+## 关键接口
 
-### Step 1: Start ACE-Step Gradio Server
+### 认证
 
-**🪟 Windows Portable Package:**
-```batch
-cd C:\ACE-Step-1.5
-python_embeded\python -m acestep --port 8001 --enable-api --backend pt --server-name 127.0.0.1
+- `POST /api/auth/setup`
+- `GET /api/auth/auto`
+- `GET /api/auth/me`
+
+### 创作
+
+- `POST /api/generate`
+- `GET /api/generate/status/:jobId`
+- `GET /api/generate/history`
+- `POST /api/generate/upload-audio`
+
+### 歌手管理
+
+- `GET /api/singers`
+- `POST /api/singers`
+- `PATCH /api/singers/:id`
+- `DELETE /api/singers/:id`
+
+### 训练
+
+- `POST /api/training/upload-audio`
+- `POST /api/training/build-dataset`
+- `POST /api/training/load-dataset`
+- `GET /api/training/sample-preview`
+- `POST /api/training/save-sample`
+- `POST /api/training/preprocess`
+- `POST /api/training/start`
+- `POST /api/training/export`
+- `POST /api/training/bind-voice`
+
+---
+
+## API 示例
+
+默认后端地址：
+
+```text
+http://127.0.0.1:3001
 ```
 
-**Linux / macOS:**
+### JavaScript
+
+```javascript
+const base = "http://127.0.0.1:3001";
+
+// 1. 创建本地用户
+const authRes = await fetch(`${base}/api/auth/setup`, {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ username: "localuser" })
+});
+const { token } = await authRes.json();
+
+// 2. 新建歌手
+const singerRes = await fetch(`${base}/api/singers`, {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+    "Authorization": `Bearer ${token}`
+  },
+  body: JSON.stringify({
+    name: "测试歌手",
+    styleTags: ["流行", "梦幻"],
+    defaultLanguage: "zh",
+    personaPrompt: "清澈、柔和、偏抒情"
+  })
+});
+const { singer } = await singerRes.json();
+
+// 3. 发起生成
+const jobRes = await fetch(`${base}/api/generate`, {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+    "Authorization": `Bearer ${token}`
+  },
+  body: JSON.stringify({
+    customMode: false,
+    songDescription: "一首清新的中文流行歌，带一点梦幻感",
+    style: "流行, 梦幻",
+    title: "平台测试",
+    lyrics: "",
+    instrumental: false,
+    vocalLanguage: "zh",
+    singerId: singer.id,
+    duration: 45
+  })
+});
+const job = await jobRes.json();
+console.log(job);
+```
+
+### Python
+
+```python
+import requests
+
+base = "http://127.0.0.1:3001"
+
+auth = requests.post(
+    f"{base}/api/auth/setup",
+    json={"username": "localuser"}
+)
+auth.raise_for_status()
+token = auth.json()["token"]
+
+singer = requests.post(
+    f"{base}/api/singers",
+    headers={"Authorization": f"Bearer {token}"},
+    json={
+        "name": "测试歌手",
+        "styleTags": ["流行", "梦幻"],
+        "defaultLanguage": "zh",
+        "personaPrompt": "清澈、柔和、偏抒情"
+    }
+)
+singer.raise_for_status()
+singer_id = singer.json()["singer"]["id"]
+
+job = requests.post(
+    f"{base}/api/generate",
+    headers={"Authorization": f"Bearer {token}"},
+    json={
+        "customMode": False,
+        "songDescription": "一首清新的中文流行歌，带一点梦幻感",
+        "style": "流行, 梦幻",
+        "title": "平台测试",
+        "lyrics": "",
+        "instrumental": False,
+        "vocalLanguage": "zh",
+        "singerId": singer_id,
+        "duration": 45
+    }
+)
+job.raise_for_status()
+print(job.json())
+```
+
+### Curl
+
 ```bash
-cd /path/to/ACE-Step-1.5
-uv run acestep --port 8001 --enable-api --backend pt --server-name 127.0.0.1
+curl -X POST http://127.0.0.1:3001/api/auth/setup \
+  -H "Content-Type: application/json" \
+  -d '{"username":"localuser"}'
 ```
 
-**Windows (Standard Installation):**
-```batch
-cd C:\path\to\ACE-Step-1.5
-uv run acestep --port 8001 --enable-api --backend pt --server-name 127.0.0.1
-```
-
-Wait for "API endpoints enabled" before proceeding.
-
-### Step 2: Start ACE-Step UI
-
-**Linux / macOS:**
 ```bash
-cd ace-step-ui
-./start.sh
+curl -X POST http://127.0.0.1:3001/api/singers \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -d '{"name":"测试歌手","styleTags":["流行","梦幻"],"defaultLanguage":"zh"}'
 ```
 
-**Windows:**
-```batch
-cd ace-step-ui
-start.bat
-```
-
-### Step 3: Create Music!
-
-| Access | URL |
-|--------|-----|
-| Local | http://localhost:3000 |
-| LAN (other devices) | http://YOUR_IP:3000 |
-
----
-
-## ⚙️ Configuration
-
-Edit `server/.env`:
-
-```env
-# Server
-PORT=3001
-
-# ACE-Step Gradio URL (must match --port used when starting ACE-Step)
-ACESTEP_API_URL=http://localhost:8001
-
-# Database (local-first, no cloud)
-DATABASE_PATH=./data/acestep.db
-
-# Optional: Pexels API for video backgrounds
-PEXELS_API_KEY=your_key_here
+```bash
+curl -X POST http://127.0.0.1:3001/api/generate \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -d '{"customMode":false,"songDescription":"一首清新的中文流行歌","style":"流行, 梦幻","title":"平台测试","lyrics":"","instrumental":false,"vocalLanguage":"zh","singerId":"YOUR_SINGER_ID","duration":45}'
 ```
 
 ---
 
-## 🎼 Generation Modes
+## 备注
 
-### Simple Mode
-Just describe what you want. ACE-Step handles the rest.
+当前前端已经同步到现有状态：
 
-> "An upbeat pop song about summer adventures with catchy hooks"
-
-### Custom Mode
-Full control over every parameter:
-
-| Parameter | Description |
-|-----------|-------------|
-| **Lyrics** | Full lyrics with `[Verse]`, `[Chorus]` tags |
-| **Style** | Genre, mood, instruments, tempo |
-| **Duration** | 30-240 seconds |
-| **BPM** | 60-200 beats per minute |
-| **Key** | Musical key (C major, A minor, etc.) |
-
-### AI Enhance & Thinking Mode
-
-| Mode | What it does | Speed impact |
-|------|-------------|--------------|
-| **AI Enhance OFF** | Sends your style tags directly to the model | Fastest |
-| **AI Enhance ON** | LLM enriches your tags into a detailed caption and generates proper BPM, key, time signature | +10-20s |
-| **Thinking Mode** | Full LLM reasoning with audio code generation | Slowest, best quality |
-
-> **Tip:** If your genre tags (e.g. "pop, rock") produce ballad-like output, turn on **AI Enhance** for much better genre accuracy. No extra VRAM needed — the LLM runs on CPU with the PT backend.
-
-### Batch Size & Bulk Generation
-
-| Setting | Description |
-|---------|-------------|
-| **Batch Size** | Number of variations generated per job (1-4). Default is **1** for broad GPU compatibility. Higher values generate more variations but use more VRAM. **8GB GPU users should keep this at 1.** |
-| **Bulk Generate** | Queue multiple independent generation jobs (1-10). Each job runs sequentially, so this is safe for any GPU. |
-| **LM Backend** | Choose between **PT** (~1.6 GB VRAM) and **VLLM** (~9.2 GB VRAM). PT is the default and works on most GPUs. |
-
-> **Tip:** Both batch size and bulk count are remembered in your browser — set them once and they stick for future sessions.
-
----
-
-## 🔧 Built-in Tools
-
-| Tool | Description |
-|------|-------------|
-| **🎚️ Audio Editor** | Cut, trim, fade, and apply effects |
-| **🎤 Stem Extraction** | Separate vocals, drums, bass, other |
-| **🎬 Video Generator** | Create music videos with stock footage |
-| **🎨 Album Art** | Auto-generated gradient covers |
-
----
-
-## 🐛 Troubleshooting
-
-| Issue | Solution |
-|-------|----------|
-| **ACE-Step not reachable** | Ensure Gradio server is running with `--enable-api` flag (see Usage section) |
-| **CUDA out of memory** | Use `--backend pt` (default), set batch size to **1**, reduce duration, or disable Thinking Mode |
-| **4GB GPU - Out of memory** | Use **PT** backend (default), batch size **1**, and keep **Thinking Mode OFF**. LLM features require 12GB+ |
-| **Genre always sounds like ballad** | Enable **AI Enhance** toggle in the Style section — it enriches your tags with proper metadata |
-| **AttributeError: 'NoneType'** | Update to latest ACE-Step-1.5 (fix merged in PR #109) |
-| **Songs show 0:00 duration** | Install FFmpeg: `sudo apt install ffmpeg` (Linux) or download from [ffmpeg.org](https://ffmpeg.org) (Windows) |
-| **LAN access not working** | Check firewall allows ports 3000 and 3001 |
-
----
-
-## 🤝 Contributing
-
-**We need your help to make ACE-Step UI even better!**
-
-This is a community-driven project and contributions are what make open source amazing. Whether you're fixing bugs, adding features, improving documentation, or sharing ideas - every contribution counts!
-
-### Ways to Contribute
-
-- 🐛 **Report bugs** - Found an issue? Open a GitHub issue
-- 💡 **Suggest features** - Have an idea? We'd love to hear it
-- 🔧 **Submit PRs** - Code contributions are always welcome
-- 📖 **Improve docs** - Help others get started
-- ⭐ **Star the repo** - Show your support!
-
-### How to Contribute
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
----
-
-## 📣 Stay Connected
-
-<p align="center">
-  <a href="https://www.youtube.com/@Ambsd-yy7os">
-    <img src="https://img.shields.io/badge/YouTube-Subscribe_for_Tutorials-FF0000?style=for-the-badge&logo=youtube" alt="YouTube">
-  </a>
-</p>
-
-<p align="center">
-  <a href="https://x.com/AmbsdOP">
-    <img src="https://img.shields.io/badge/X_(Twitter)-Follow_for_Updates-1DA1F2?style=for-the-badge&logo=x&logoColor=white" alt="X/Twitter">
-  </a>
-</p>
-
-<p align="center">
-  <strong>Subscribe and follow for:</strong><br>
-  🎥 Video tutorials and demos<br>
-  🚀 New feature announcements<br>
-  💡 Tips and tricks<br>
-  🎵 AI music generation news
-</p>
-
----
-
-## 🙏 Credits
-
-- **[ACE-Step](https://github.com/ace-step/ACE-Step-1.5)** - The revolutionary open source AI music generation model
-- **[AudioMass](https://github.com/pkalogiros/AudioMass)** - Web audio editor
-- **[Demucs](https://github.com/facebookresearch/demucs)** - Audio source separation
-- **[Pexels](https://www.pexels.com)** - Stock video backgrounds
-
----
-
-## 📄 License
-
-This project is open source under the [MIT License](LICENSE).
-
----
-
-<p align="center">
-  <strong>⭐ If ACE-Step UI helps you create amazing music, please star this repo! ⭐</strong>
-</p>
-
-<p align="center">
-  <em>Made with ❤️ for the open-source AI music community</em>
-</p>
-
-<p align="center">
-  <strong>Stop paying for Suno. Start creating with ACE-Step.</strong>
-</p>
+- 中文文案
+- 无深浅模式切换
+- 设置页已移除语言切换、外观切换、关注和 GitHub 按钮
+- 虚拟歌手工作流已接入创作 / 管理 / 训练 / 音乐库

@@ -1,15 +1,20 @@
 import React, { useState } from 'react';
-import { X, User, Sparkles } from 'lucide-react';
+import { Lock, User, Sparkles } from 'lucide-react';
 import { useI18n } from '../context/I18nContext';
+
+export type AuthMode = 'login' | 'register';
 
 interface UsernameModalProps {
   isOpen: boolean;
-  onSubmit: (username: string) => Promise<void>;
+  onSubmit: (username: string, password: string, mode: AuthMode) => Promise<void>;
 }
 
 export const UsernameModal: React.FC<UsernameModalProps> = ({ isOpen, onSubmit }) => {
   const { t } = useI18n();
+  const [mode, setMode] = useState<AuthMode>('login');
   const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
@@ -30,11 +35,22 @@ export const UsernameModal: React.FC<UsernameModalProps> = ({ isOpen, onSubmit }
       return;
     }
 
+    if (password.length < 6) {
+      setError('密码至少需要 6 位');
+      return;
+    }
+
+    if (mode === 'register' && password !== confirmPassword) {
+      setError('两次输入的密码不一致');
+      return;
+    }
+
     setIsLoading(true);
     try {
-      await onSubmit(trimmed);
+      await onSubmit(trimmed, password, mode);
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('failedToSetUsername'));
+      const message = err instanceof Error ? err.message.replace(/^\d+:\s*/, '') : t('failedToSetUsername');
+      setError(message);
     } finally {
       setIsLoading(false);
     }
@@ -48,29 +64,52 @@ export const UsernameModal: React.FC<UsernameModalProps> = ({ isOpen, onSubmit }
       {/* Modal */}
       <div className="relative w-full max-w-md bg-zinc-900 rounded-2xl shadow-2xl border border-white/10 overflow-hidden">
         {/* Header gradient */}
-        <div className="h-2 bg-gradient-to-r from-pink-500 via-purple-500 to-blue-500" />
+        <div className="h-2" style={{ backgroundImage: 'var(--vs-gradient-main)' }} />
 
         <div className="p-8">
           {/* Logo */}
           <div className="flex justify-center mb-6">
-            <div className="w-16 h-16 rounded-full bg-gradient-to-br from-pink-500 to-purple-600 flex items-center justify-center shadow-lg">
+            <div className="vs-gradient-icon w-16 h-16 rounded-full flex items-center justify-center shadow-lg">
               <Sparkles className="w-8 h-8 text-white" />
             </div>
           </div>
 
           {/* Title */}
           <h2 className="text-2xl font-bold text-center text-white mb-2">
-            {t('welcomeTitle')}
+            {mode === 'login' ? '登录 Vsinger Studio' : '注册新用户'}
           </h2>
           <p className="text-zinc-400 text-center mb-8">
-            {t('welcomeSubtitle')}
+            {mode === 'login' ? 'ASH 用户默认密码为 123456' : '创建独立账号后，歌曲和虚拟歌手数据会按账号分开保存'}
           </p>
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="grid grid-cols-2 gap-2 rounded-xl bg-zinc-800 p-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setMode('login');
+                  setError('');
+                }}
+                className={`rounded-lg py-2 text-sm font-semibold transition-colors ${mode === 'login' ? 'bg-white text-zinc-900' : 'text-zinc-400 hover:text-white'}`}
+              >
+                登录
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setMode('register');
+                  setError('');
+                }}
+                className={`rounded-lg py-2 text-sm font-semibold transition-colors ${mode === 'register' ? 'bg-white text-zinc-900' : 'text-zinc-400 hover:text-white'}`}
+              >
+                注册
+              </button>
+            </div>
+
             <div>
               <label htmlFor="username" className="block text-sm font-medium text-zinc-300 mb-2">
-                {t('yourName')}
+                用户名
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -81,21 +120,64 @@ export const UsernameModal: React.FC<UsernameModalProps> = ({ isOpen, onSubmit }
                   id="username"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  placeholder={t('enterYourName')}
-                  className="w-full pl-10 pr-4 py-3 bg-zinc-800 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent transition-all"
+                  placeholder="ASH"
+                  className="vs-accent-focus w-full pl-10 pr-4 py-3 bg-zinc-800 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 transition-all"
                   autoFocus
                   disabled={isLoading}
                 />
               </div>
-              {error && (
-                <p className="mt-2 text-sm text-red-400">{error}</p>
-              )}
             </div>
+
+            <div>
+              <label htmlFor="password" className="block text-sm font-medium text-zinc-300 mb-2">
+                密码
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Lock className="w-5 h-5 text-zinc-500" />
+                </div>
+                <input
+                  type="password"
+                  id="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="至少 6 位"
+                  className="vs-accent-focus w-full pl-10 pr-4 py-3 bg-zinc-800 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 transition-all"
+                  disabled={isLoading}
+                />
+              </div>
+            </div>
+
+            {mode === 'register' && (
+              <div>
+                <label htmlFor="confirmPassword" className="block text-sm font-medium text-zinc-300 mb-2">
+                  确认密码
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Lock className="w-5 h-5 text-zinc-500" />
+                  </div>
+                  <input
+                    type="password"
+                    id="confirmPassword"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="再次输入密码"
+                    className="vs-accent-focus w-full pl-10 pr-4 py-3 bg-zinc-800 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 transition-all"
+                    disabled={isLoading}
+                  />
+                </div>
+              </div>
+            )}
+
+            {error && (
+              <p className="text-sm text-red-400">{error}</p>
+            )}
 
             <button
               type="submit"
-              disabled={isLoading || !username.trim()}
-              className="w-full py-3 bg-gradient-to-r from-pink-500 to-purple-600 text-white font-semibold rounded-xl hover:from-pink-600 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all transform hover:scale-[1.02] active:scale-[0.98]"
+              disabled={isLoading || !username.trim() || !password}
+              className="vs-gradient-button w-full py-3 text-white font-semibold rounded-xl disabled:opacity-50 disabled:cursor-not-allowed transition-all transform hover:scale-[1.02] active:scale-[0.98]"
             >
               {isLoading ? (
                 <span className="flex items-center justify-center gap-2">
@@ -106,7 +188,7 @@ export const UsernameModal: React.FC<UsernameModalProps> = ({ isOpen, onSubmit }
                   {t('gettingStarted')}
                 </span>
               ) : (
-                t('getStarted')
+                mode === 'login' ? '登录' : '注册并登录'
               )}
             </button>
           </form>

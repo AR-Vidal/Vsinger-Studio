@@ -21,6 +21,10 @@ interface ExtendedSong extends Song {
   creator_avatar?: string | null;
 }
 
+const getSongArtistName = (song: ExtendedSong): string => (
+  song.singerName || song.singerNameSnapshot || '虚拟歌手'
+);
+
 export const SearchPage: React.FC<SearchPageProps> = ({
   onPlaySong,
   currentSong,
@@ -68,6 +72,10 @@ export const SearchPage: React.FC<SearchPageProps> = ({
     viewCount: s.view_count || s.viewCount || 0,
     creator: s.creator,
     creator_avatar: s.creator_avatar || s.creatorAvatar || null,
+    singerId: s.singer_id || s.singerId || null,
+    singerName: s.singer_name || s.singerName || s.singer_name_snapshot || null,
+    singerNameSnapshot: s.singer_name_snapshot || s.singerNameSnapshot || null,
+    hasSinger: Boolean(s.has_singer ?? s.hasSinger),
   });
 
   // Shuffle array randomly
@@ -495,25 +503,12 @@ const FeaturedSongCard: React.FC<FeaturedSongCardProps> = ({
           ))}
         </div>
         <div className="flex items-center gap-2 text-[10px] text-zinc-400">
-          {song.creator && (
-            <button
-              onClick={(e) => { e.stopPropagation(); onNavigateToProfile?.(song.creator!); }}
-              className="flex items-center gap-1 hover:text-pink-500 transition-colors max-w-[80px]"
-            >
-              {song.creator_avatar ? (
-                <img
-                  src={song.creator_avatar}
-                  alt={song.creator}
-                  className="w-3.5 h-3.5 rounded-full object-cover"
-                />
-              ) : (
-                <div className="w-3.5 h-3.5 rounded-full bg-gradient-to-br from-pink-500 to-purple-500 flex items-center justify-center text-[7px] text-white font-bold flex-shrink-0">
-                  {song.creator.charAt(0).toUpperCase()}
-                </div>
-              )}
-              <span className="truncate">{song.creator}</span>
-            </button>
-          )}
+          <span className="flex items-center gap-1 max-w-[90px]">
+            <div className="w-3.5 h-3.5 rounded-full bg-gradient-to-br from-pink-500 to-purple-500 flex items-center justify-center text-[7px] text-white font-bold flex-shrink-0">
+              {getSongArtistName(song).charAt(0).toUpperCase()}
+            </div>
+            <span className="truncate">{getSongArtistName(song)}</span>
+          </span>
           <span className="flex items-center gap-0.5 flex-shrink-0">
             <Play size={9} /> {formatNumber(song.viewCount)}
           </span>

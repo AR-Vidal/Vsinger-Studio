@@ -3,14 +3,167 @@ import { authMiddleware, AuthenticatedRequest } from '../middleware/auth.js';
 import { getGradioClient } from '../services/gradio-client.js';
 import { config } from '../config/index.js';
 import { resolvePythonPath } from '../services/acestep.js';
+import { pool } from '../db/pool.js';
+import { clearSingerVoice, getLoraState } from '../services/lora-manager.js';
 import multer from 'multer';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import { existsSync, readdirSync, statSync, readFileSync } from 'fs';
-import { mkdir, writeFile, readFile } from 'fs/promises';
+import { mkdir, writeFile, readFile, rm } from 'fs/promises';
 import { execSync, spawn } from 'child_process';
 import { randomUUID } from 'crypto';
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 const router = Router();
+const ACESTEP_API_TIMEOUT_MS = 30000;
+
+function resolveAceStepRelativePath(targetPath: string, aceStepDir: string): string {
+  return path.isAbsolute(targetPath)
+    ? targetPath
+    : path.resolve(aceStepDir, targetPath);
+}
+
+async function readDatasetFile(datasetPath: string): Promise<{
+  metadata: Record<string, unknown>;
+  samples: Array<Record<string, unknown>>;
+}> {
+  const content = await readFile(datasetPath, 'utf-8');
+  const normalizedContent = content.replace(/^\uFEFF/, '');
+  const parsed = JSON.parse(normalizedContent) as {
+    metadata?: Record<string, unknown>;
+    samples?: Array<Record<string, unknown>>;
+  };
+
+  return {
+    metadata: parsed.metadata ?? {},
+    samples: Array.isArray(parsed.samples) ? parsed.samples : [],
+  };
+}
+
+function mapDatasetSample(sample: Record<string, unknown> | undefined, index = 0) {
+  if (!sample) {
+    return null;
+  }
+
+  return {
+    index,
+    audio: sample.audio_path ?? null,
+    filename: sample.filename ?? '',
+    caption: sample.caption ?? '',
+    genre: sample.genre ?? '',
+    promptOverride: sample.prompt_override === 'genre'
+      ? 'Genre'
+      : sample.prompt_override === 'caption'
+        ? 'Caption'
+        : 'Use Global Ratio',
+    lyrics: sample.lyrics ?? '',
+    bpm: sample.bpm ?? null,
+    key: sample.keyscale ?? '',
+    timeSignature: sample.timesignature ?? '',
+    duration: sample.duration ?? 0,
+    language: sample.language ?? 'unknown',
+    instrumental: sample.is_instrumental ?? true,
+    rawLyrics: sample.raw_lyrics ?? '',
+    labeled: sample.labeled ?? false,
+  };
+}
+
+function normalizePromptOverride(value: unknown) {
+  return value === 'genre'
+    ? 'Genre'
+    : value === 'caption'
+      ? 'Caption'
+      : 'Use Global Ratio';
+}
+
+function normalizeGradioAudio(value: unknown): string | null {
+  if (typeof value === 'string' && value.trim()) {
+    return value;
+  }
+
+  if (value && typeof value === 'object') {
+    const fileLike = value as { path?: unknown; url?: unknown };
+    if (typeof fileLike.path === 'string' && fileLike.path.trim()) {
+      return fileLike.path;
+    }
+    if (typeof fileLike.url === 'string' && fileLike.url.trim()) {
+      return fileLike.url;
+    }
+  }
+
+  return null;
+}
+
+function mapGradioPreviewSample(
+  values: unknown[],
+  index: number,
+  offsets: {
+    audio: number;
+    filename: number;
+    caption: number;
+    genre: number;
+    promptOverride: number;
+    lyrics: number;
+    bpm: number;
+    key: number;
+    timeSignature: number;
+    duration: number;
+    language: number;
+    instrumental: number;
+    rawLyrics: number;
+  },
+) {
+  return {
+    index,
+    audio: normalizeGradioAudio(values[offsets.audio]),
+    filename: typeof values[offsets.filename] === 'string' ? values[offsets.filename] : '',
+    caption: typeof values[offsets.caption] === 'string' ? values[offsets.caption] : '',
+    genre: typeof values[offsets.genre] === 'string' ? values[offsets.genre] : '',
+    promptOverride: normalizePromptOverride(values[offsets.promptOverride]),
+    lyrics: typeof values[offsets.lyrics] === 'string' ? values[offsets.lyrics] : '',
+    bpm: typeof values[offsets.bpm] === 'number' ? values[offsets.bpm] : null,
+    key: typeof values[offsets.key] === 'string' ? values[offsets.key] : '',
+    timeSignature: typeof values[offsets.timeSignature] === 'string' ? values[offsets.timeSignature] : '',
+    duration: typeof values[offsets.duration] === 'number' ? values[offsets.duration] : 0,
+    language: typeof values[offsets.language] === 'string' ? values[offsets.language] : 'unknown',
+    instrumental: Boolean(values[offsets.instrumental]),
+    rawLyrics: typeof values[offsets.rawLyrics] === 'string' ? values[offsets.rawLyrics] : '',
+  };
+}
+
+function getDatasetName(
+  metadata: Record<string, unknown>,
+  datasetPath: string,
+  fallback = 'my_lora_dataset',
+): string {
+  return typeof metadata.name === 'string' && metadata.name.trim()
+    ? metadata.name.trim()
+    : path.basename(datasetPath, '.json') || fallback;
+}
+
+function countLabeledSamples(samples: Array<Record<string, unknown>>) {
+  return samples.filter((sample) => sample.labeled === true).length;
+}
+
+async function loadDatasetIntoGradio(client: Awaited<ReturnType<typeof getGradioClient>>, datasetPath: string) {
+  const result = await client.predict('/load_existing_dataset_for_preprocess', [datasetPath]);
+  return result.data as unknown[];
+}
+
+async function saveDatasetFromGradio(
+  client: Awaited<ReturnType<typeof getGradioClient>>,
+  savePath: string,
+  datasetName: string,
+) {
+  const result = await client.predict('/save_dataset', [savePath, datasetName]);
+  return result.data as unknown[];
+}
+
+function isAutoLabelFailureStatus(status: string) {
+  return /please scan|no samples|model not initialized|llm not initialized|no dataset/i.test(status);
+}
 
 // --- Audio upload via multer disk storage ---
 const AUDIO_EXTENSIONS = ['.wav', '.mp3', '.flac', '.ogg', '.opus'];
@@ -69,6 +222,72 @@ function getAceStepDir(): string {
     return path.isAbsolute(envPath) ? envPath : path.resolve(process.cwd(), envPath);
   }
   return path.resolve(config.datasets.dir, '..');
+}
+
+function parseJsonObject(value: unknown): Record<string, unknown> {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+
+  if (typeof value !== 'string' || !value.trim()) {
+    return {};
+  }
+
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : {};
+  } catch {
+    return {};
+  }
+}
+
+function resolveWithinAceStep(rawPath: string | undefined, aceStepDir: string): string | null {
+  if (!rawPath || !rawPath.trim()) return null;
+  return path.isAbsolute(rawPath)
+    ? path.resolve(rawPath)
+    : path.resolve(aceStepDir, rawPath);
+}
+
+function isInsideBase(baseDir: string, targetPath: string): boolean {
+  const relative = path.relative(baseDir, targetPath);
+  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+}
+
+function pathsOverlap(pathA: string, pathB: string): boolean {
+  return (
+    pathA === pathB ||
+    pathA.startsWith(`${pathB}${path.sep}`) ||
+    pathB.startsWith(`${pathA}${path.sep}`)
+  );
+}
+
+async function cleanupReplacedBindingPaths(
+  oldPaths: Array<string | null | undefined>,
+  newPaths: Array<string | null | undefined>,
+  aceStepDir: string,
+): Promise<void> {
+  const normalizedNewPaths = newPaths
+    .filter((candidate): candidate is string => Boolean(candidate))
+    .map((candidate) => path.resolve(candidate));
+
+  for (const oldPath of oldPaths) {
+    if (!oldPath) continue;
+
+    const resolvedOldPath = path.resolve(oldPath);
+    if (!isInsideBase(aceStepDir, resolvedOldPath)) {
+      console.warn('[Training] Skip cleanup outside ACE-Step directory:', resolvedOldPath);
+      continue;
+    }
+
+    if (normalizedNewPaths.some((newPath) => pathsOverlap(resolvedOldPath, newPath))) {
+      continue;
+    }
+
+    if (!existsSync(resolvedOldPath)) continue;
+    await rm(resolvedOldPath, { recursive: true, force: true });
+  }
 }
 
 // ================== NEW ROUTES ==================
@@ -314,7 +533,12 @@ router.post('/preprocess', authMiddleware, async (req: AuthenticatedRequest, res
     const aceStepDir = getAceStepDir();
     const scriptPath = path.resolve(__dirname, '../../scripts/preprocess_dataset.py');
     const pythonPath = resolvePythonPath(aceStepDir);
-    const resolvedOutput = outputDir || path.join(config.datasets.dir, 'preprocessed_tensors');
+    const resolvedDatasetPath = path.isAbsolute(datasetPath)
+      ? datasetPath
+      : path.resolve(aceStepDir, datasetPath);
+    const resolvedOutput = outputDir
+      ? (path.isAbsolute(outputDir) ? outputDir : path.resolve(aceStepDir, outputDir))
+      : path.join(config.datasets.dir, 'preprocessed_tensors');
 
     // Ensure output dir exists
     await mkdir(resolvedOutput, { recursive: true });
@@ -322,32 +546,75 @@ router.post('/preprocess', authMiddleware, async (req: AuthenticatedRequest, res
     // Spawn Python process
     const child = spawn(pythonPath, [
       scriptPath,
-      '--dataset', datasetPath,
+      '--dataset', resolvedDatasetPath,
       '--output', resolvedOutput,
       '--json',
     ], {
       cwd: aceStepDir,
-      env: { ...process.env },
+      env: {
+        ...process.env,
+        ACESTEP_PATH: aceStepDir,
+      },
     });
 
     let stdout = '';
     let stderr = '';
 
     child.stdout.on('data', (data: Buffer) => { stdout += data.toString(); });
-    child.stderr.on('data', (data: Buffer) => { stderr += data.toString(); });
+    child.stderr.on('data', (data: Buffer) => {
+      const chunk = data.toString();
+      stderr += chunk;
+      for (const line of chunk.split(/\r?\n/)) {
+        if (line.trim()) {
+          console.error('[Training][preprocess]', line);
+        }
+      }
+    });
+
+    const parseLastJsonLine = (text: string): Record<string, unknown> | null => {
+      const lines = text
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean);
+
+      for (let index = lines.length - 1; index >= 0; index -= 1) {
+        const line = lines[index];
+        if (!line.startsWith('{')) continue;
+        try {
+          return JSON.parse(line) as Record<string, unknown>;
+        } catch {
+          // Ignore non-JSON lines and keep scanning upward.
+        }
+      }
+
+      return null;
+    };
 
     child.on('close', (code: number | null) => {
+      const parsedResult = parseLastJsonLine(stdout) ?? parseLastJsonLine(stderr);
       if (code === 0) {
         // Try to parse JSON output
         try {
-          const result = JSON.parse(stdout.trim().split('\n').pop() || '{}');
+          const result = parsedResult ?? JSON.parse(stdout.trim().split('\n').pop() || '{}');
           res.json({ status: 'Preprocessing complete', ...result });
         } catch {
           res.json({ status: 'Preprocessing complete', output: stdout.trim() });
         }
       } else {
+        const message =
+          typeof parsedResult?.message === 'string' && parsedResult.message.trim()
+            ? parsedResult.message.trim()
+            : (stderr.trim() || stdout.trim() || `Process exited with code ${code ?? 'unknown'}`);
+
+        console.error('[Training] Preprocess failed', {
+          code,
+          datasetPath: resolvedDatasetPath,
+          outputDir: resolvedOutput,
+          message,
+        });
+
         res.status(500).json({
-          error: 'Preprocessing failed',
+          error: message,
           code,
           stderr: stderr.trim(),
           stdout: stdout.trim(),
@@ -441,34 +708,45 @@ router.post('/scan-directory', authMiddleware, async (req: AuthenticatedRequest,
 router.post('/auto-label', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const {
+      datasetPath,
       skipMetas = false,
       formatLyrics = false,
       transcribeLyrics = false,
       onlyUnlabeled = false,
     } = req.body;
 
-    // auto_label_all is a lambda-wrapped handler in Gradio, so it may not be accessible
-    // by name. We try the likely endpoint name; if it fails, return a helpful message.
-    const client = await getGradioClient();
-    try {
-      const result = await client.predict('/auto_label_all', [
-        skipMetas,
-        formatLyrics,
-        transcribeLyrics,
-        onlyUnlabeled,
-      ]);
-      const data = result.data as unknown[];
-      res.json({
-        dataframe: data[0],
-        status: data[1],
-      });
-    } catch (gradioError) {
-      // Lambda endpoints aren't named — suggest using Gradio UI
-      res.status(501).json({
-        error: 'Auto-labeling requires the Gradio UI. The model must be initialized and the dataset loaded in the Gradio training tab.',
-        hint: 'Use the Gradio UI at the ACE-Step server URL to auto-label your dataset, then reload it here.',
-      });
+    if (!datasetPath || typeof datasetPath !== 'string') {
+      res.status(400).json({ error: 'datasetPath is required' });
+      return;
     }
+
+    const aceStepDir = getAceStepDir();
+    const resolvedDatasetPath = resolveAceStepRelativePath(datasetPath, aceStepDir);
+    const dataset = await readDatasetFile(resolvedDatasetPath);
+    const client = await getGradioClient();
+
+    await loadDatasetIntoGradio(client, resolvedDatasetPath);
+
+    const result = await client.predict('/lambda_71', [
+      skipMetas,
+      formatLyrics,
+      transcribeLyrics,
+      onlyUnlabeled,
+    ]);
+    const data = result.data as unknown[];
+    const status = typeof data[1] === 'string' ? data[1] : 'Auto-label finished.';
+
+    if (!isAutoLabelFailureStatus(status)) {
+      await saveDatasetFromGradio(client, resolvedDatasetPath, getDatasetName(dataset.metadata, resolvedDatasetPath));
+    }
+
+    const refreshedDataset = await readDatasetFile(resolvedDatasetPath);
+
+    res.json({
+      status,
+      labeledCount: countLabeledSamples(refreshedDataset.samples),
+      sampleCount: refreshedDataset.samples.length,
+    });
   } catch (error) {
     console.error('[Training] Auto-label error:', error);
     res.status(500).json({ error: error instanceof Error ? error.message : 'Auto-label failed' });
@@ -613,39 +891,42 @@ router.post('/load-dataset', authMiddleware, async (req: AuthenticatedRequest, r
       return;
     }
 
+    const aceStepDir = getAceStepDir();
+    const resolvedDatasetPath = resolveAceStepRelativePath(datasetPath, aceStepDir);
     const client = await getGradioClient();
-    const result = await client.predict('/load_existing_dataset_for_preprocess', [datasetPath]);
-    const data = result.data as unknown[];
+    const result = await loadDatasetIntoGradio(client, resolvedDatasetPath);
+    const dataset = await readDatasetFile(resolvedDatasetPath);
+    const labeledCount = countLabeledSamples(dataset.samples);
+    const loadStatus = typeof result[0] === 'string' ? result[0] : 'Dataset loaded.';
+    const firstSample = result.length >= 16
+      ? mapGradioPreviewSample(result, Number(result[2] ?? 0), {
+        audio: 3,
+        filename: 4,
+        caption: 5,
+        genre: 6,
+        promptOverride: 7,
+        lyrics: 8,
+        bpm: 9,
+        key: 10,
+        timeSignature: 11,
+        duration: 12,
+        language: 13,
+        instrumental: 14,
+        rawLyrics: 15,
+      })
+      : mapDatasetSample(dataset.samples[0], 0);
 
-    // Returns: [status, dataframe, sampleIdx, audioPreview, filename, caption, genre,
-    //           promptOverride, lyrics, bpm, key, timesig, duration, language, instrumental,
-    //           rawLyrics, datasetName, customTag, tagPosition, allInstrumental, genreRatio]
     res.json({
-      status: data[0],
-      dataframe: data[1],
-      sampleCount: Array.isArray((data[1] as any)?.data) ? (data[1] as any).data.length : 0,
-      sample: {
-        index: data[2],
-        audio: data[3],
-        filename: data[4],
-        caption: data[5],
-        genre: data[6],
-        promptOverride: data[7],
-        lyrics: data[8],
-        bpm: data[9],
-        key: data[10],
-        timeSignature: data[11],
-        duration: data[12],
-        language: data[13],
-        instrumental: data[14],
-        rawLyrics: data[15],
-      },
+      status: `${loadStatus}\nSamples: ${dataset.samples.length} (${labeledCount} labeled)`,
+      dataframe: result[1] ?? [],
+      sampleCount: dataset.samples.length,
+      sample: firstSample,
       settings: {
-        datasetName: data[16],
-        customTag: data[17],
-        tagPosition: data[18],
-        allInstrumental: data[19],
-        genreRatio: data[20],
+        datasetName: getDatasetName(dataset.metadata, resolvedDatasetPath),
+        customTag: dataset.metadata.custom_tag ?? '',
+        tagPosition: dataset.metadata.tag_position ?? 'prepend',
+        allInstrumental: dataset.metadata.all_instrumental ?? false,
+        genreRatio: dataset.metadata.genre_ratio ?? 0,
       },
     });
   } catch (error) {
@@ -658,27 +939,24 @@ router.post('/load-dataset', authMiddleware, async (req: AuthenticatedRequest, r
 router.get('/sample-preview', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const idx = parseInt(req.query.idx as string) || 0;
-
     const client = await getGradioClient();
     const result = await client.predict('/get_sample_preview', [idx]);
     const data = result.data as unknown[];
-
-    // Returns: [audio, filename, caption, genre, promptOverride, lyrics, bpm, key, timesig, duration, language, instrumental, rawLyrics]
-    res.json({
-      audio: data[0],
-      filename: data[1],
-      caption: data[2],
-      genre: data[3],
-      promptOverride: data[4],
-      lyrics: data[5],
-      bpm: data[6],
-      key: data[7],
-      timeSignature: data[8],
-      duration: data[9],
-      language: data[10],
-      instrumental: data[11],
-      rawLyrics: data[12],
-    });
+    res.json(mapGradioPreviewSample(data, idx, {
+      audio: 0,
+      filename: 1,
+      caption: 2,
+      genre: 3,
+      promptOverride: 4,
+      lyrics: 5,
+      bpm: 6,
+      key: 7,
+      timeSignature: 8,
+      duration: 9,
+      language: 10,
+      instrumental: 11,
+      rawLyrics: 12,
+    }));
   } catch (error) {
     console.error('[Training] Sample preview error:', error);
     res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to get sample preview' });
@@ -688,10 +966,33 @@ router.get('/sample-preview', authMiddleware, async (req: AuthenticatedRequest, 
 // POST /api/training/save-sample — Save edits to a dataset sample
 router.post('/save-sample', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { sampleIdx, caption, genre, promptOverride, lyrics, bpm, key, timeSignature, language, instrumental } = req.body;
+    const {
+      sampleIdx,
+      datasetPath,
+      caption,
+      genre,
+      promptOverride,
+      lyrics,
+      bpm,
+      key,
+      timeSignature,
+      language,
+      instrumental,
+    } = req.body;
 
+    if (!datasetPath || typeof datasetPath !== 'string') {
+      res.status(400).json({ error: 'datasetPath is required' });
+      return;
+    }
+
+    const aceStepDir = getAceStepDir();
+    const resolvedDatasetPath = resolveAceStepRelativePath(datasetPath, aceStepDir);
+    const dataset = await readDatasetFile(resolvedDatasetPath);
     const client = await getGradioClient();
-    const result = await client.predict('/save_sample_edit', [
+
+    await loadDatasetIntoGradio(client, resolvedDatasetPath);
+
+    const updateResult = await client.predict('/save_sample_edit', [
       sampleIdx ?? 0,
       caption ?? '',
       genre ?? '',
@@ -700,15 +1001,17 @@ router.post('/save-sample', authMiddleware, async (req: AuthenticatedRequest, re
       bpm ?? 120,
       key ?? '',
       timeSignature ?? '',
-      language ?? 'instrumental',
+      language ?? 'unknown',
       instrumental ?? true,
     ]);
-    const data = result.data as unknown[];
+    const updateData = updateResult.data as unknown[];
+    const editStatus = typeof updateData[1] === 'string' ? updateData[1] : 'Sample updated.';
 
-    // Returns: [dataframe, editStatus]
+    await saveDatasetFromGradio(client, resolvedDatasetPath, getDatasetName(dataset.metadata, resolvedDatasetPath));
+
     res.json({
-      dataframe: data[0],
-      status: data[1],
+      dataframe: updateData[0] ?? null,
+      status: `${editStatus} Saved to ${resolvedDatasetPath}`,
     });
   } catch (error) {
     console.error('[Training] Save sample error:', error);
@@ -726,36 +1029,26 @@ router.post('/update-settings', authMiddleware, (_req: AuthenticatedRequest, res
 router.post('/save-dataset', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { savePath, datasetName, customTag, tagPosition, allInstrumental, genreRatio } = req.body;
+    void customTag;
+    void tagPosition;
+    void allInstrumental;
+    void genreRatio;
 
-    const resolvedPath = (savePath ?? `./datasets/${datasetName ?? 'my_lora_dataset'}.json`).trim();
+    const aceStepDir = getAceStepDir();
+    const rawPath = (savePath ?? `./datasets/${datasetName ?? 'my_lora_dataset'}.json`).trim();
+    const resolvedPath = resolveAceStepRelativePath(rawPath, aceStepDir);
+    const client = await getGradioClient();
+    const data = await saveDatasetFromGradio(
+      client,
+      resolvedPath,
+      typeof datasetName === 'string' && datasetName.trim()
+        ? datasetName.trim()
+        : path.basename(resolvedPath, '.json'),
+    );
 
-    // Use REST API to avoid @gradio/client Radio serialization issues
-    const apiUrl = config.acestep.apiUrl;
-    const body: Record<string, unknown> = {
-      save_path: resolvedPath,
-      dataset_name: datasetName ?? 'my_lora_dataset',
-    };
-    if (customTag !== undefined) body.custom_tag = customTag;
-    if (tagPosition !== undefined) body.tag_position = tagPosition;
-    if (allInstrumental !== undefined) body.all_instrumental = allInstrumental;
-    if (genreRatio !== undefined) body.genre_ratio = genreRatio;
-
-    const apiRes = await fetch(`${apiUrl}/v1/dataset/save`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(30_000),
-    });
-
-    if (!apiRes.ok) {
-      const err = await apiRes.json().catch(() => ({})) as any;
-      throw new Error(err?.detail || err?.error || `Save failed: ${apiRes.status}`);
-    }
-
-    const data = await apiRes.json() as any;
     res.json({
-      status: data.status ?? 'Saved',
-      path: data.save_path ?? resolvedPath,
+      status: typeof data[0] === 'string' ? data[0] : 'Saved',
+      path: typeof data[1] === 'string' ? data[1] : resolvedPath,
     });
   } catch (error) {
     console.error('[Training] Save dataset error:', error);
@@ -774,7 +1067,9 @@ router.post('/load-tensors', authMiddleware, async (req: AuthenticatedRequest, r
     ]);
     const data = result.data as unknown[];
 
-    res.json({ status: data[0] });
+    res.json({
+      status: data[0],
+    });
   } catch (error) {
     console.error('[Training] Load tensors error:', error);
     res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to load training dataset' });
@@ -835,6 +1130,158 @@ router.post('/stop', authMiddleware, async (_req: AuthenticatedRequest, res: Res
 });
 
 // POST /api/training/export — Export trained LoRA weights
+router.post('/bind-voice', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const singerId = typeof req.body?.singerId === 'string' ? req.body.singerId.trim() : '';
+    const adapterPath = typeof req.body?.adapterPath === 'string' ? req.body.adapterPath.trim() : '';
+    const exportPath = typeof req.body?.exportPath === 'string' ? req.body.exportPath.trim() : '';
+    const outputDir = typeof req.body?.outputDir === 'string' ? req.body.outputDir.trim() : '';
+    const datasetName = typeof req.body?.datasetName === 'string' ? req.body.datasetName.trim() : '';
+    const trainingMeta = parseJsonObject(req.body?.trainingMeta);
+
+    if (!singerId) {
+      res.status(400).json({ error: 'singerId is required' });
+      return;
+    }
+
+    if (!adapterPath) {
+      res.status(400).json({ error: 'adapterPath is required' });
+      return;
+    }
+
+    const singerResult = await pool.query(
+      'SELECT id, user_id, name FROM virtual_singers WHERE id = ?',
+      [singerId],
+    );
+
+    if (singerResult.rows.length === 0) {
+      res.status(404).json({ error: 'Singer not found' });
+      return;
+    }
+
+    const singer = singerResult.rows[0] as { id: string; user_id: string; name: string };
+    if (singer.user_id !== req.user!.id) {
+      res.status(403).json({ error: 'Access denied' });
+      return;
+    }
+
+    const existingBindingResult = await pool.query(
+      `SELECT singer_id, adapter_path, export_path, output_dir, dataset_name, training_meta, bound_at, updated_at
+       FROM singer_voice_binding
+       WHERE singer_id = ?`,
+      [singerId],
+    );
+
+    const existingBinding = existingBindingResult.rows[0] as
+      | {
+          singer_id: string;
+          adapter_path: string;
+          export_path: string | null;
+          output_dir: string | null;
+          dataset_name: string | null;
+          training_meta: string | null;
+          bound_at: string | null;
+          updated_at: string | null;
+        }
+      | undefined;
+
+    const aceStepDir = getAceStepDir();
+    const newResolvedPaths = [
+      resolveWithinAceStep(adapterPath, aceStepDir),
+      resolveWithinAceStep(exportPath || undefined, aceStepDir),
+      resolveWithinAceStep(outputDir || undefined, aceStepDir),
+    ];
+
+    const loraState = getLoraState();
+    if (
+      existingBinding?.adapter_path &&
+      loraState.path === existingBinding.adapter_path &&
+      existingBinding.adapter_path !== adapterPath
+    ) {
+      await clearSingerVoice();
+    }
+
+    await pool.query(
+      `INSERT INTO singer_voice_binding (
+         singer_id,
+         adapter_path,
+         export_path,
+         output_dir,
+         dataset_name,
+         training_meta,
+         bound_at,
+         updated_at
+       ) VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+       ON CONFLICT(singer_id) DO UPDATE SET
+         adapter_path = excluded.adapter_path,
+         export_path = excluded.export_path,
+         output_dir = excluded.output_dir,
+         dataset_name = excluded.dataset_name,
+         training_meta = excluded.training_meta,
+         bound_at = datetime('now'),
+         updated_at = datetime('now')`,
+      [
+        singerId,
+        adapterPath,
+        exportPath || null,
+        outputDir || null,
+        datasetName || null,
+        JSON.stringify(trainingMeta),
+      ],
+    );
+
+    if (existingBinding) {
+      await cleanupReplacedBindingPaths(
+        [
+          resolveWithinAceStep(existingBinding.adapter_path, aceStepDir),
+          resolveWithinAceStep(existingBinding.export_path || undefined, aceStepDir),
+          resolveWithinAceStep(existingBinding.output_dir || undefined, aceStepDir),
+        ],
+        newResolvedPaths,
+        aceStepDir,
+      );
+    }
+
+    const updatedBindingResult = await pool.query(
+      `SELECT singer_id, adapter_path, export_path, output_dir, dataset_name, training_meta, bound_at, updated_at
+       FROM singer_voice_binding
+       WHERE singer_id = ?`,
+      [singerId],
+    );
+
+    const binding = updatedBindingResult.rows[0] as {
+      singer_id: string;
+      adapter_path: string;
+      export_path: string | null;
+      output_dir: string | null;
+      dataset_name: string | null;
+      training_meta: string | null;
+      bound_at: string | null;
+      updated_at: string | null;
+    };
+
+    res.json({
+      success: true,
+      replacedExisting: Boolean(existingBinding),
+      singerId,
+      singerName: singer.name,
+      binding: {
+        singerId: binding.singer_id,
+        adapterPath: binding.adapter_path,
+        exportPath: binding.export_path,
+        outputDir: binding.output_dir,
+        datasetName: binding.dataset_name,
+        trainingMeta: parseJsonObject(binding.training_meta),
+        boundAt: binding.bound_at,
+        updatedAt: binding.updated_at,
+      },
+    });
+  } catch (error) {
+    console.error('[Training] Bind voice error:', error);
+    res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to bind voice' });
+  }
+});
+
 router.post('/export', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { exportPath, loraOutputDir } = req.body;
@@ -846,7 +1293,11 @@ router.post('/export', authMiddleware, async (req: AuthenticatedRequest, res: Re
     ]);
     const data = result.data as unknown[];
 
-    res.json({ status: data[0] });
+    res.json({
+      status: data[0],
+      exportPath: exportPath ?? './lora_output/final_lora',
+      loraOutputDir: loraOutputDir ?? './lora_output',
+    });
   } catch (error) {
     console.error('[Training] Export LoRA error:', error);
     res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to export LoRA' });

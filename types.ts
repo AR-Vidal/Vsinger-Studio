@@ -1,3 +1,5 @@
+import type { SingerGenderValue } from './constants/genders';
+
 export interface Song {
   id: string;
   title: string;
@@ -6,13 +8,13 @@ export interface Song {
   coverUrl: string;
   duration: string;
   createdAt: Date;
+  tags: string[];
+  audioUrl?: string;
   isGenerating?: boolean;
-  queuePosition?: number; // Position in queue (undefined = actively generating, number = waiting in queue)
+  queuePosition?: number;
   progress?: number;
   stage?: string;
   generationParams?: any;
-  tags: string[];
-  audioUrl?: string;
   isPublic?: boolean;
   likeCount?: number;
   viewCount?: number;
@@ -20,6 +22,10 @@ export interface Song {
   creator?: string;
   creator_avatar?: string;
   ditModel?: string;
+  singerId?: string | null;
+  singerName?: string | null;
+  singerNameSnapshot?: string | null;
+  hasSinger?: boolean;
 }
 
 export interface Playlist {
@@ -47,31 +53,37 @@ export interface Comment {
   createdAt: Date;
 }
 
+export interface VirtualSinger {
+  id: string;
+  userId: string;
+  name: string;
+  styleTags: string[];
+  defaultLanguage: string;
+  gender: SingerGenderValue;
+  personaPrompt: string;
+  notes: string;
+  avatarUrl: string;
+  createdAt: string;
+  updatedAt: string;
+  hasVoiceBinding: boolean;
+  bindingStatus: 'bound' | 'unbound';
+  boundAt?: string | null;
+  bindingUpdatedAt?: string | null;
+}
+
 export interface GenerationParams {
-  // Mode
   customMode: boolean;
-
-  // Simple Mode
   songDescription?: string;
-
-  // Custom Mode
   prompt: string;
   lyrics: string;
   style: string;
   title: string;
-  ditModel?: string;
-
-  // Common
   instrumental: boolean;
   vocalLanguage: string;
-
-  // Music Parameters
   bpm: number;
   keyScale: string;
   timeSignature: string;
   duration: number;
-
-  // Generation Settings
   inferenceSteps: number;
   guidanceScale: number;
   batchSize: number;
@@ -82,8 +94,6 @@ export interface GenerationParams {
   audioFormat: 'mp3' | 'flac';
   inferMethod: 'ode' | 'sde';
   shift: number;
-
-  // LM Parameters
   lmTemperature: number;
   lmCfgScale: number;
   lmTopK: number;
@@ -91,8 +101,6 @@ export interface GenerationParams {
   lmNegativePrompt: string;
   lmBackend?: 'pt' | 'vllm';
   lmModel?: string;
-
-  // Expert Parameters
   referenceAudioUrl?: string;
   sourceAudioUrl?: string;
   referenceAudioTitle?: string;
@@ -120,6 +128,9 @@ export interface GenerationParams {
   trackName?: string;
   completeTrackClasses?: string[];
   isFormatCaption?: boolean;
+  ditModel?: string;
+  singerId?: string | null;
+  singerGender?: Exclude<SingerGenderValue, 'unspecified'> | null;
 }
 
 export interface PlayerState {
@@ -151,5 +162,4 @@ export interface UserProfile {
   };
 }
 
-// Simplified views for ACE-Step UI
-export type View = 'create' | 'library' | 'training' | 'profile' | 'song' | 'playlist' | 'search' | 'news';
+export type View = 'create' | 'library' | 'management' | 'training' | 'profile' | 'song' | 'playlist';

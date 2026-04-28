@@ -3,6 +3,7 @@
 # Starts ACE-Step API + Backend + Frontend
 
 set -e
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 echo "=================================="
 echo "  ACE-Step Complete Startup"
@@ -23,7 +24,7 @@ if [ ! -d "server/node_modules" ]; then
 fi
 
 # Get ACE-Step path from environment or use default
-ACESTEP_PATH="${ACESTEP_PATH:-../ACE-Step-1.5}"
+ACESTEP_PATH="${ACESTEP_PATH:-$SCRIPT_DIR/ACE-Step-1.5}"
 
 # Check if ACE-Step exists
 if [ ! -d "$ACESTEP_PATH" ]; then
@@ -52,10 +53,14 @@ echo
 # Create log directory
 mkdir -p logs
 
-# Start ACE-Step API in background
-echo "[1/3] Starting ACE-Step API server..."
+# Start ACE-Step Gradio + API in background
+echo "[1/3] Starting ACE-Step Gradio + API server..."
 cd "$ACESTEP_PATH"
-uv run acestep-api --port 8001 > "../ace-step-ui/logs/api.log" 2>&1 &
+MASTER_ADDR=127.0.0.1 \
+VLLM_HOST_IP=127.0.0.1 \
+ACESTEP_LM_BACKEND=pt \
+ACESTEP_LM_OFFLOAD_TO_CPU=true \
+uv run acestep --port 8001 --enable-api --backend pt --server-name 127.0.0.1 > "../ace-step-ui/logs/api.log" 2>&1 &
 API_PID=$!
 cd - > /dev/null
 

@@ -4,6 +4,7 @@ import { pool } from '../db/pool.js';
 import { generateUUID } from '../db/sqlite.js';
 import { config } from '../config/index.js';
 import { authMiddleware, AuthenticatedRequest } from '../middleware/auth.js';
+import { hashPassword, verifyPassword } from '../services/password.js';
 
 const jwtOptions = { expiresIn: config.jwt.expiresIn } as SignOptions;
 
@@ -11,118 +12,163 @@ const router = Router();
 
 interface SetupBody {
   username: string;
+  password?: string;
+}
+
+interface CredentialsBody {
+  username: string;
+  password: string;
 }
 
 function issueAccessToken(payload: { id: string; username: string }): string {
   return jwt.sign(payload, config.jwt.secret, jwtOptions);
 }
 
-// Auto-login: Get the default user from database (for local single-user app)
+function sanitizeUsername(username: unknown): string {
+  if (typeof username !== 'string') return '';
+  return username
+    .trim()
+    .replace(/[^a-zA-Z0-9_-]/g, '')
+    .slice(0, 50);
+}
+
+function serializeUser(user: any) {
+  return {
+    id: user.id,
+    username: user.username,
+    bio: user.bio,
+    avatar_url: user.avatar_url,
+    banner_url: user.banner_url,
+    isAdmin: Boolean(user.is_admin),
+    createdAt: user.created_at,
+  };
+}
+
+async function findUserByUsername(username: string) {
+  const result = await pool.query(
+    'SELECT id, username, password_hash, bio, avatar_url, banner_url, is_admin, created_at FROM users WHERE username = ?',
+    [username]
+  );
+  return result.rows[0];
+}
+
+async function respondWithAuth(user: any, res: Response, status = 200): Promise<void> {
+  const token = issueAccessToken({
+    id: user.id,
+    username: user.username,
+  });
+
+  res.status(status).json({
+    user: serializeUser(user),
+    token,
+  });
+}
+
+// Auto-login is disabled now that local users require passwords.
 router.get('/auto', async (_req: Request, res: Response) => {
-  try {
-    // Get the first user from the database (local app typically has one user)
-    const result = await pool.query(
-      'SELECT id, username, bio, avatar_url, banner_url, is_admin, created_at FROM users ORDER BY created_at ASC LIMIT 1'
-    );
-
-    if (result.rows.length === 0) {
-      // No user exists yet - frontend should show username setup
-      res.status(404).json({ error: 'No user found' });
-      return;
-    }
-
-    const user = result.rows[0];
-
-    // Generate token for the user
-    const token = issueAccessToken({
-      id: user.id,
-      username: user.username,
-    });
-
-    res.json({
-      user: {
-        id: user.id,
-        username: user.username,
-        bio: user.bio,
-        avatar_url: user.avatar_url,
-        banner_url: user.banner_url,
-        isAdmin: Boolean(user.is_admin),
-        createdAt: user.created_at,
-      },
-      token,
-    });
-  } catch (error) {
-    console.error('Auto-login error:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
+  res.status(401).json({ error: 'Login required' });
 });
 
-// Setup or get user by username (simplified auth for local app)
-router.post('/setup', async (req: Request<object, object, SetupBody>, res: Response) => {
+router.post('/register', async (req: Request<object, object, CredentialsBody>, res: Response) => {
   try {
-    const { username } = req.body;
+    const username = sanitizeUsername(req.body.username);
+    const password = typeof req.body.password === 'string' ? req.body.password : '';
 
-    if (!username || typeof username !== 'string') {
-      res.status(400).json({ error: 'Username is required' });
-      return;
-    }
-
-    // Sanitize username
-    const sanitizedUsername = username
-      .trim()
-      .replace(/[^a-zA-Z0-9_-]/g, '')
-      .slice(0, 50);
-
-    if (sanitizedUsername.length < 2) {
+    if (username.length < 2) {
       res.status(400).json({ error: 'Username must be at least 2 characters' });
       return;
     }
 
-    // Check if user exists
-    const existingUser = await pool.query(
-      'SELECT id, username, bio, avatar_url, banner_url, is_admin, created_at FROM users WHERE username = ?',
-      [sanitizedUsername]
-    );
-
-    let user;
-
-    if (existingUser.rows.length > 0) {
-      // User exists, return it
-      user = existingUser.rows[0];
-    } else {
-      // Create new user
-      const userId = generateUUID();
-      await pool.query(
-        `INSERT INTO users (id, username, is_admin, created_at, updated_at)
-         VALUES (?, ?, 0, datetime('now'), datetime('now'))`,
-        [userId, sanitizedUsername]
-      );
-
-      const newUser = await pool.query(
-        'SELECT id, username, bio, avatar_url, banner_url, is_admin, created_at FROM users WHERE id = ?',
-        [userId]
-      );
-      user = newUser.rows[0];
+    if (password.length < 6) {
+      res.status(400).json({ error: 'Password must be at least 6 characters' });
+      return;
     }
 
-    // Generate token
-    const token = issueAccessToken({
-      id: user.id,
-      username: user.username,
-    });
+    const existingUser = await findUserByUsername(username);
+    if (existingUser) {
+      res.status(409).json({ error: 'Username is already taken' });
+      return;
+    }
 
-    res.status(200).json({
-      user: {
-        id: user.id,
-        username: user.username,
-        bio: user.bio,
-        avatar_url: user.avatar_url,
-        banner_url: user.banner_url,
-        isAdmin: Boolean(user.is_admin),
-        createdAt: user.created_at,
-      },
-      token,
-    });
+    const userId = generateUUID();
+    await pool.query(
+      `INSERT INTO users (id, username, password_hash, is_admin, created_at, updated_at)
+       VALUES (?, ?, ?, 0, datetime('now'), datetime('now'))`,
+      [userId, username, hashPassword(password)]
+    );
+
+    const user = await pool.query(
+      'SELECT id, username, bio, avatar_url, banner_url, is_admin, created_at FROM users WHERE id = ?',
+      [userId]
+    );
+    await respondWithAuth(user.rows[0], res, 201);
+  } catch (error) {
+    console.error('Register error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.post('/login', async (req: Request<object, object, CredentialsBody>, res: Response) => {
+  try {
+    const username = sanitizeUsername(req.body.username);
+    const password = typeof req.body.password === 'string' ? req.body.password : '';
+
+    if (!username || !password) {
+      res.status(400).json({ error: 'Username and password are required' });
+      return;
+    }
+
+    const user = await findUserByUsername(username);
+    if (!user || !verifyPassword(password, user.password_hash)) {
+      res.status(401).json({ error: 'Invalid username or password' });
+      return;
+    }
+
+    await respondWithAuth(user, res);
+  } catch (error) {
+    console.error('Login error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Compatibility endpoint: behaves as register when password is supplied.
+router.post('/setup', async (req: Request<object, object, SetupBody>, res: Response) => {
+  try {
+    const username = sanitizeUsername(req.body.username);
+    const password = typeof req.body.password === 'string' ? req.body.password : '';
+
+    if (username.length < 2) {
+      res.status(400).json({ error: 'Username must be at least 2 characters' });
+      return;
+    }
+
+    if (password.length < 6) {
+      res.status(400).json({ error: 'Password must be at least 6 characters' });
+      return;
+    }
+
+    const existingUser = await findUserByUsername(username);
+    if (existingUser) {
+      if (!verifyPassword(password, existingUser.password_hash)) {
+        res.status(401).json({ error: 'Invalid username or password' });
+        return;
+      }
+      await respondWithAuth(existingUser, res);
+      return;
+    }
+
+    const userId = generateUUID();
+    await pool.query(
+      `INSERT INTO users (id, username, password_hash, is_admin, created_at, updated_at)
+       VALUES (?, ?, ?, 0, datetime('now'), datetime('now'))`,
+      [userId, username, hashPassword(password)]
+    );
+
+    const newUser = await pool.query(
+      'SELECT id, username, bio, avatar_url, banner_url, is_admin, created_at FROM users WHERE id = ?',
+      [userId]
+    );
+    await respondWithAuth(newUser.rows[0], res);
   } catch (error) {
     console.error('Auth setup error:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -144,15 +190,7 @@ router.get('/me', authMiddleware, async (req: AuthenticatedRequest, res: Respons
 
     const user = result.rows[0];
     res.json({
-      user: {
-        id: user.id,
-        username: user.username,
-        bio: user.bio,
-        avatar_url: user.avatar_url,
-        banner_url: user.banner_url,
-        isAdmin: Boolean(user.is_admin),
-        createdAt: user.created_at,
-      },
+      user: serializeUser(user),
     });
   } catch (error) {
     console.error('Get user error:', error);
@@ -170,11 +208,7 @@ router.patch('/username', authMiddleware, async (req: AuthenticatedRequest, res:
       return;
     }
 
-    // Sanitize username
-    const sanitizedUsername = username
-      .trim()
-      .replace(/[^a-zA-Z0-9_-]/g, '')
-      .slice(0, 50);
+    const sanitizedUsername = sanitizeUsername(username);
 
     if (sanitizedUsername.length < 2) {
       res.status(400).json({ error: 'Username must be at least 2 characters' });
@@ -213,15 +247,7 @@ router.patch('/username', authMiddleware, async (req: AuthenticatedRequest, res:
     });
 
     res.json({
-      user: {
-        id: user.id,
-        username: user.username,
-        bio: user.bio,
-        avatar_url: user.avatar_url,
-        banner_url: user.banner_url,
-        isAdmin: Boolean(user.is_admin),
-        createdAt: user.created_at,
-      },
+      user: serializeUser(user),
       token,
     });
   } catch (error) {
@@ -255,15 +281,7 @@ router.post('/refresh', authMiddleware, async (req: AuthenticatedRequest, res: R
     });
 
     res.json({
-      user: {
-        id: user.id,
-        username: user.username,
-        bio: user.bio,
-        avatar_url: user.avatar_url,
-        banner_url: user.banner_url,
-        isAdmin: Boolean(user.is_admin),
-        createdAt: user.created_at,
-      },
+      user: serializeUser(user),
       token,
     });
   } catch (error) {

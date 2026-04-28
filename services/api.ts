@@ -1,3 +1,5 @@
+import type { SingerGenderValue } from '../constants/genders';
+
 // Use relative URLs so Vite proxy handles them (enables LAN access)
 const API_BASE = '';
 
@@ -48,7 +50,7 @@ async function api<T>(endpoint: string, options: ApiOptions = {}): Promise<T> {
   return response.json();
 }
 
-// Auth API (simplified - username only)
+// Auth API
 export interface User {
   id: string;
   username: string;
@@ -69,8 +71,14 @@ export const authApi = {
   auto: (): Promise<AuthResponse> =>
     api('/api/auth/auto'),
 
-  setup: (username: string): Promise<AuthResponse> =>
-    api('/api/auth/setup', { method: 'POST', body: { username } }),
+  setup: (username: string, password: string): Promise<AuthResponse> =>
+    api('/api/auth/setup', { method: 'POST', body: { username, password } }),
+
+  login: (username: string, password: string): Promise<AuthResponse> =>
+    api('/api/auth/login', { method: 'POST', body: { username, password } }),
+
+  register: (username: string, password: string): Promise<AuthResponse> =>
+    api('/api/auth/register', { method: 'POST', body: { username, password } }),
 
   me: (token: string): Promise<{ user: User }> =>
     api('/api/auth/me', { token }),
@@ -109,6 +117,28 @@ export interface Song {
   creator_avatar?: string;
   ditModel?: string;
   generation_params?: any;
+  singer_id?: string | null;
+  singer_name_snapshot?: string | null;
+  singer_name?: string | null;
+  has_singer?: boolean;
+}
+
+export interface VirtualSinger {
+  id: string;
+  userId: string;
+  name: string;
+  styleTags: string[];
+  defaultLanguage: string;
+  gender: SingerGenderValue;
+  personaPrompt: string;
+  notes: string;
+  avatarUrl: string;
+  createdAt: string;
+  updatedAt: string;
+  hasVoiceBinding: boolean;
+  bindingStatus: 'bound' | 'unbound';
+  boundAt?: string | null;
+  bindingUpdatedAt?: string | null;
 }
 
 // Transform songs to have proper audio URLs
@@ -120,6 +150,7 @@ function transformSongs(songs: Song[]): Song[] {
       ...song,
       audio_url: resolvedUrl,
       audioUrl: resolvedUrl,
+      has_singer: Boolean(song.has_singer),
     };
   });
 }
@@ -194,6 +225,10 @@ export const songsApi = {
         bpm: s.bpm,
         key_scale: s.key_scale,
         time_signature: s.time_signature,
+        singer_id: s.singer_id ?? s.singerId ?? null,
+        singer_name_snapshot: s.singer_name_snapshot ?? s.singerNameSnapshot ?? null,
+        singer_name: s.singer_name ?? s.singerName ?? null,
+        has_singer: Boolean(s.has_singer ?? s.hasSinger),
       }
     };
   },
@@ -266,6 +301,7 @@ export interface GenerationParams {
   randomSeed?: boolean;
   seed?: number;
   thinking?: boolean;
+  enhance?: boolean;
   audioFormat?: 'mp3' | 'flac';
   inferMethod?: 'ode' | 'sde';
   shift?: number;
@@ -308,6 +344,8 @@ export interface GenerationParams {
   completeTrackClasses?: string[];
   isFormatCaption?: boolean;
   loraLoaded?: boolean;
+  singerId?: string | null;
+  singerGender?: Exclude<SingerGenderValue, 'unspecified'> | null;
 }
 
 export interface GenerationJob {
@@ -329,6 +367,51 @@ export interface GenerationJob {
   };
   error?: string;
 }
+
+export const singersApi = {
+  list: (token: string): Promise<{ singers: VirtualSinger[] }> =>
+    api('/api/singers', { token }),
+
+  create: (payload: {
+    name: string;
+    styleTags?: string[];
+    defaultLanguage?: string;
+    gender?: SingerGenderValue;
+    personaPrompt?: string;
+    notes?: string;
+    avatarUrl?: string;
+  }, token: string): Promise<{ singer: VirtualSinger }> =>
+    api('/api/singers', { method: 'POST', body: payload, token }),
+
+  update: (id: string, payload: Partial<{
+    name: string;
+    styleTags: string[];
+    defaultLanguage: string;
+    gender: SingerGenderValue;
+    personaPrompt: string;
+    notes: string;
+    avatarUrl: string;
+  }>, token: string): Promise<{ singer: VirtualSinger }> =>
+    api(`/api/singers/${id}`, { method: 'PATCH', body: payload, token }),
+
+  uploadAvatar: async (file: File, token: string): Promise<{ url: string }> => {
+    const formData = new FormData();
+    formData.append('avatar', file);
+    const response = await fetch(`${API_BASE}/api/singers/avatar`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: formData,
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: 'Upload failed' }));
+      throw new Error(error.details || error.error || 'Upload failed');
+    }
+    return response.json();
+  },
+
+  remove: (id: string, token: string): Promise<{ success: boolean }> =>
+    api(`/api/singers/${id}`, { method: 'DELETE', token }),
+};
 
 export const generateApi = {
   startGeneration: (params: GenerationParams, token: string): Promise<GenerationJob> =>
@@ -432,8 +515,10 @@ export const usersApi = {
   getProfile: (username: string, token?: string | null): Promise<{ user: UserProfile }> =>
     api(`/api/users/${username}`, { token: token || undefined }),
 
-  getPublicSongs: (username: string): Promise<{ songs: Song[] }> =>
-    api(`/api/users/${username}/songs`),
+  getPublicSongs: async (username: string): Promise<{ songs: Song[] }> => {
+    const result = await api(`/api/users/${username}/songs`) as { songs: Song[] };
+    return { songs: transformSongs(result.songs) };
+  },
 
   getPublicPlaylists: (username: string): Promise<{ playlists: any[] }> =>
     api(`/api/users/${username}/playlists`),
@@ -679,15 +764,15 @@ export const trainingApi = {
 
   // Auto-label dataset samples (requires model loaded in Gradio)
   autoLabel: (params: {
+    datasetPath: string;
     skipMetas?: boolean;
     formatLyrics?: boolean;
     transcribeLyrics?: boolean;
     onlyUnlabeled?: boolean;
   }, token: string): Promise<{
-    dataframe?: unknown;
     status: string;
-    error?: string;
-    hint?: string;
+    labeledCount?: number;
+    sampleCount?: number;
   }> => api('/api/training/auto-label', { method: 'POST', body: params, token }),
 
   // Initialize model for training (requires Gradio)
@@ -745,6 +830,7 @@ export const trainingApi = {
 
   saveSample: (params: {
     sampleIdx: number;
+    datasetPath: string;
     caption: string;
     genre: string;
     promptOverride: string;
@@ -790,8 +876,32 @@ export const trainingApi = {
   exportLora: (params: {
     exportPath?: string;
     loraOutputDir?: string;
-  }, token: string): Promise<{ status: string }> =>
+  }, token: string): Promise<{ status: string; exportPath: string; loraOutputDir: string }> =>
     api('/api/training/export', { method: 'POST', body: params, token }),
+
+  bindVoice: (params: {
+    singerId: string;
+    adapterPath: string;
+    exportPath?: string;
+    outputDir?: string;
+    datasetName?: string;
+    trainingMeta?: Record<string, unknown>;
+  }, token: string): Promise<{
+    success: boolean;
+    replacedExisting: boolean;
+    singerId: string;
+    singerName: string;
+    binding: {
+      singerId: string;
+      adapterPath: string;
+      exportPath?: string | null;
+      outputDir?: string | null;
+      datasetName?: string | null;
+      trainingMeta: Record<string, unknown>;
+      boundAt?: string | null;
+      updatedAt?: string | null;
+    };
+  }> => api('/api/training/bind-voice', { method: 'POST', body: params, token }),
 
   importDataset: (datasetType: string, token: string): Promise<{ status: string }> =>
     api('/api/training/import-dataset', { method: 'POST', body: { datasetType }, token }),

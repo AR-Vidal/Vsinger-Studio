@@ -25,6 +25,7 @@ import contactRoutes from './routes/contact.js';
 import referenceTrackRoutes from './routes/referenceTrack.js';
 import loraRoutes from './routes/lora.js';
 import trainingRoutes from './routes/training.js';
+import singersRoutes from './routes/singers.js';
 import { pool } from './db/pool.js';
 import './db/migrate.js';
 
@@ -127,9 +128,10 @@ app.get('/api/oembed', async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT s.id, s.title, s.style, s.cover_url, s.duration,
-              COALESCE(u.username, 'Anonymous') as creator
+              COALESCE(vs.name, s.singer_name_snapshot, '虚拟歌手') as artist_name
        FROM songs s
        LEFT JOIN users u ON s.user_id = u.id
+       LEFT JOIN virtual_singers vs ON s.singer_id = vs.id
        WHERE s.id = ? AND s.is_public = 1`,
       [match[1]]
     );
@@ -146,7 +148,7 @@ app.get('/api/oembed', async (req, res) => {
       provider_name: 'ACE-Step UI',
       provider_url: config.frontendUrl,
       title: song.title,
-      author_name: song.creator,
+      author_name: song.artist_name,
       thumbnail_url: song.cover_url,
       thumbnail_width: 400,
       thumbnail_height: 400,
@@ -176,9 +178,10 @@ app.get('/song/:id', async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT s.id, s.title, s.style, s.cover_url, s.audio_url, s.duration, s.like_count, s.view_count,
-              COALESCE(u.username, 'Anonymous') as creator
+              COALESCE(vs.name, s.singer_name_snapshot, '虚拟歌手') as artist_name
        FROM songs s
        LEFT JOIN users u ON s.user_id = u.id
+       LEFT JOIN virtual_singers vs ON s.singer_id = vs.id
        WHERE s.id = ? AND s.is_public = 1`,
       [songId]
     );
@@ -190,7 +193,7 @@ app.get('/song/:id', async (req, res) => {
 
     const song = result.rows[0];
     const coverUrl = song.cover_url || `https://picsum.photos/seed/${song.id}/1200/630`;
-    const title = `${song.title} by ${song.creator}`;
+    const title = `${song.title} by ${song.artist_name}`;
     const description = `🎵 ${song.style} • Create your own AI music free on ACE-Step UI`;
     const pageUrl = `${config.frontendUrl}/song/${song.id}`;
 
@@ -350,9 +353,13 @@ app.get('/api/search', async (req, res) => {
       const songsResult = await pool.query(
         `SELECT s.id, s.title, s.lyrics, s.style, s.caption, s.cover_url, s.audio_url,
                 s.duration, s.tags, s.like_count, s.view_count, s.is_public, s.created_at,
-                u.username as creator, u.avatar_url as creator_avatar
+                u.username as creator, u.avatar_url as creator_avatar,
+                s.singer_id, s.singer_name_snapshot,
+                COALESCE(vs.name, s.singer_name_snapshot) AS singer_name,
+                CASE WHEN COALESCE(vs.name, s.singer_name_snapshot) IS NOT NULL THEN 1 ELSE 0 END AS has_singer
          FROM songs s
          LEFT JOIN users u ON s.user_id = u.id
+         LEFT JOIN virtual_singers vs ON s.singer_id = vs.id
          WHERE s.is_public = 1
            AND (s.title LIKE ? COLLATE NOCASE OR s.style LIKE ? COLLATE NOCASE)
          ORDER BY s.like_count DESC
@@ -407,6 +414,7 @@ app.use('/api/contact', contactRoutes);
 app.use('/api/reference-tracks', referenceTrackRoutes);
 app.use('/api/lora', loraRoutes);
 app.use('/api/training', trainingRoutes);
+app.use('/api/singers', singersRoutes);
 
 // Error handler
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

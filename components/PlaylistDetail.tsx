@@ -12,6 +12,11 @@ interface PlaylistDetailProps {
     onNavigateToProfile: (username: string) => void;
 }
 
+const getSongArtistName = (song: Song): string => {
+    const row = song as any;
+    return row.singer_name || row.singerName || row.singer_name_snapshot || row.singerNameSnapshot || '虚拟歌手';
+};
+
 export const PlaylistDetail: React.FC<PlaylistDetailProps> = ({ playlistId, onBack, onPlaySong, onSelect, onNavigateToProfile }) => {
     const { user: currentUser, token } = useAuth();
     const { t } = useI18n();
@@ -44,6 +49,10 @@ export const PlaylistDetail: React.FC<PlaylistDetailProps> = ({ playlistId, onBa
                 likeCount: s.like_count || 0,
                 viewCount: s.view_count || 0,
                 creator: s.creator,
+                singer_id: s.singer_id || s.singerId || null,
+                singer_name: s.singer_name || s.singerName || s.singer_name_snapshot || null,
+                singer_name_snapshot: s.singer_name_snapshot || s.singerNameSnapshot || null,
+                has_singer: Boolean(s.has_singer ?? s.hasSinger),
                 created_at: s.created_at,
                 addedAt: s.added_at
             }));
@@ -228,7 +237,7 @@ export const PlaylistDetail: React.FC<PlaylistDetailProps> = ({ playlistId, onBa
                                     <div className="flex flex-col truncate min-w-0">
                                         <span className="font-medium text-white truncate">{song.title}</span>
                                         <span className="text-xs text-zinc-500 group-hover:text-zinc-400 truncate">
-                                            {song.creator || t('unknown')} <span className="md:hidden">• {song.duration ? `${Math.floor(song.duration / 60)}:${String(Math.floor(song.duration % 60)).padStart(2, '0')}` : '0:00'}</span>
+                                            {getSongArtistName(song)} <span className="md:hidden">• {song.duration ? `${Math.floor(song.duration / 60)}:${String(Math.floor(song.duration % 60)).padStart(2, '0')}` : '0:00'}</span>
                                         </span>
                                     </div>
                                 </div>
@@ -236,9 +245,8 @@ export const PlaylistDetail: React.FC<PlaylistDetailProps> = ({ playlistId, onBa
                                 {/* Artist - hidden on mobile */}
                                 <span className="hidden md:block hover:underline cursor-pointer truncate" onClick={(e) => {
                                     e.stopPropagation();
-                                    song.creator && onNavigateToProfile(song.creator);
                                 }}>
-                                    {song.creator || t('unknown')}
+                                    {getSongArtistName(song)}
                                 </span>
 
                                 {/* Date Added - hidden on mobile */}

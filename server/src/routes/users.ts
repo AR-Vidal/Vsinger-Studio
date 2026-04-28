@@ -106,9 +106,13 @@ router.get('/:username/songs', async (req, res: Response) => {
         const songsResult = await pool.query(
             `SELECT s.id, s.title, s.lyrics, s.style, s.caption, s.cover_url, s.audio_url,
               s.duration, s.bpm, s.key_scale, s.time_signature, s.tags, s.like_count,
-              s.view_count, s.created_at, u.username as creator
+              s.view_count, s.created_at, u.username as creator,
+              s.singer_id, s.singer_name_snapshot,
+              COALESCE(vs.name, s.singer_name_snapshot) as singer_name,
+              CASE WHEN COALESCE(vs.name, s.singer_name_snapshot) IS NOT NULL THEN 1 ELSE 0 END as has_singer
        FROM songs s
        LEFT JOIN users u ON s.user_id = u.id
+       LEFT JOIN virtual_singers vs ON s.singer_id = vs.id
        WHERE s.user_id = $1 AND s.is_public = 1
        ORDER BY s.created_at DESC`,
             [userId]
@@ -117,6 +121,7 @@ router.get('/:username/songs', async (req, res: Response) => {
         const songs = await Promise.all(
             songsResult.rows.map(async (row) => ({
                 ...row,
+                has_singer: Boolean(row.has_singer),
                 audio_url: await resolvePublicAudioUrl(row.audio_url),
             }))
         );

@@ -1,16 +1,16 @@
 import { Router, Response } from 'express';
 import { authMiddleware, AuthenticatedRequest } from '../middleware/auth.js';
-import { getGradioClient } from '../services/gradio-client.js';
+import {
+  clearSingerVoice,
+  ensureSingerVoice,
+  getLoraState,
+  loadLora,
+  setLoraScale,
+  toggleLora,
+  unloadLora,
+} from '../services/lora-manager.js';
 
 const router = Router();
-
-// Local LoRA state tracking (Gradio doesn't have a dedicated status endpoint)
-let loraState = {
-  loaded: false,
-  active: false,
-  scale: 1.0,
-  path: '',
-};
 
 // POST /api/lora/load — Load a LoRA adapter
 router.post('/load', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
@@ -21,13 +21,8 @@ router.post('/load', authMiddleware, async (req: AuthenticatedRequest, res: Resp
       return;
     }
 
-    const client = await getGradioClient();
-    const result = await client.predict('/load_lora', [lora_path]);
-    const status = (result.data as unknown[])[0] as string;
-
-    loraState = { loaded: true, active: true, scale: loraState.scale, path: lora_path };
-
-    res.json({ message: status, lora_path, loaded: true });
+    const result = await loadLora(lora_path);
+    res.json({ message: result.message, lora_path, loaded: true });
   } catch (error) {
     console.error('[LoRA] Load error:', error);
     res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to load LoRA' });
@@ -37,13 +32,8 @@ router.post('/load', authMiddleware, async (req: AuthenticatedRequest, res: Resp
 // POST /api/lora/unload — Unload the current LoRA adapter
 router.post('/unload', authMiddleware, async (_req: AuthenticatedRequest, res: Response) => {
   try {
-    const client = await getGradioClient();
-    const result = await client.predict('/unload_lora', []);
-    const status = (result.data as unknown[])[0] as string;
-
-    loraState = { loaded: false, active: false, scale: 1.0, path: '' };
-
-    res.json({ message: status });
+    const result = await unloadLora();
+    res.json({ message: result.message });
   } catch (error) {
     console.error('[LoRA] Unload error:', error);
     res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to unload LoRA' });
@@ -59,13 +49,8 @@ router.post('/scale', authMiddleware, async (req: AuthenticatedRequest, res: Res
       return;
     }
 
-    const client = await getGradioClient();
-    const result = await client.predict('/set_lora_scale', [scale]);
-    const status = (result.data as unknown[])[0] as string;
-
-    loraState.scale = scale;
-
-    res.json({ message: status, scale });
+    const result = await setLoraScale(scale);
+    res.json({ message: result.message, scale });
   } catch (error) {
     console.error('[LoRA] Scale error:', error);
     res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to set LoRA scale' });
@@ -76,15 +61,9 @@ router.post('/scale', authMiddleware, async (req: AuthenticatedRequest, res: Res
 router.post('/toggle', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { enabled } = req.body;
-    const useLoRA = typeof enabled === 'boolean' ? enabled : !loraState.active;
-
-    const client = await getGradioClient();
-    const result = await client.predict('/set_use_lora', [useLoRA]);
-    const status = (result.data as unknown[])[0] as string;
-
-    loraState.active = useLoRA;
-
-    res.json({ message: status, active: useLoRA });
+    const useLoRA = typeof enabled === 'boolean' ? enabled : !getLoraState().active;
+    const result = await toggleLora(useLoRA);
+    res.json({ message: result.message, active: useLoRA });
   } catch (error) {
     console.error('[LoRA] Toggle error:', error);
     res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to toggle LoRA' });
@@ -93,7 +72,7 @@ router.post('/toggle', authMiddleware, async (req: AuthenticatedRequest, res: Re
 
 // GET /api/lora/status — Get current LoRA state
 router.get('/status', authMiddleware, async (_req: AuthenticatedRequest, res: Response) => {
-  res.json(loraState);
+  res.json(getLoraState());
 });
 
 export default router;

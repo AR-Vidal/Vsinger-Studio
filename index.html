@@ -13,7 +13,7 @@
     <meta name="author" content="ACE-Step UI" />
 
     <!-- Additional SEO -->
-    <meta name="theme-color" content="#ec4899" />
+    <meta name="theme-color" content="#052659" />
     <meta name="application-name" content="ACE-Step UI" />
     <meta name="apple-mobile-web-app-title" content="ACE-Step UI" />
 
@@ -63,6 +63,26 @@
 
       :root {
         --breakpoint-mobile: 768px;
+        --vs-950: #021024;
+        --vs-800: #052659;
+        --vs-500: #5483B3;
+        --vs-300: #7DA0CA;
+        --vs-100: #C1EBFF;
+        --vs-gradient-main: linear-gradient(135deg, var(--vs-950) 0%, var(--vs-800) 34%, var(--vs-500) 72%, var(--vs-300) 100%);
+        --vs-gradient-soft: linear-gradient(135deg, rgba(2, 16, 36, 0.12) 0%, rgba(5, 38, 89, 0.18) 32%, rgba(84, 131, 179, 0.22) 68%, rgba(193, 235, 255, 0.34) 100%);
+        --vs-accent-border: rgba(84, 131, 179, 0.45);
+        --vs-accent-soft: rgba(193, 235, 255, 0.38);
+        --vs-accent-soft-dark: rgba(84, 131, 179, 0.18);
+      }
+
+      ::selection {
+        background: rgba(125, 160, 202, 0.35);
+        color: #021024;
+      }
+
+      .dark ::selection {
+        background: rgba(84, 131, 179, 0.35);
+        color: #ffffff;
       }
 
       body {
@@ -102,9 +122,151 @@
       }
 
       .gradient-text {
-        background: linear-gradient(to right, #f472b6, #a78bfa, #60a5fa);
+        background: linear-gradient(to right, var(--vs-950), var(--vs-800), var(--vs-500), var(--vs-300));
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
+      }
+
+      .vs-gradient-button,
+      .vs-gradient-icon {
+        background-image: var(--vs-gradient-main);
+        color: #ffffff;
+      }
+
+      .vs-gradient-button {
+        box-shadow: 0 18px 36px rgba(5, 38, 89, 0.18);
+      }
+
+      .vs-gradient-icon {
+        box-shadow: 0 12px 24px rgba(5, 38, 89, 0.2);
+      }
+
+      .vs-accent-text {
+        color: var(--vs-500);
+      }
+
+      .dark .vs-accent-text {
+        color: var(--vs-300);
+      }
+
+      .vs-accent-text-strong {
+        color: var(--vs-800);
+      }
+
+      .dark .vs-accent-text-strong {
+        color: var(--vs-100);
+      }
+
+      .vs-accent-border {
+        border-color: var(--vs-accent-border);
+      }
+
+      .vs-accent-soft {
+        background-color: var(--vs-accent-soft);
+        color: var(--vs-800);
+      }
+
+      .dark .vs-accent-soft {
+        background-color: var(--vs-accent-soft-dark);
+        color: var(--vs-100);
+      }
+
+      .vs-accent-surface {
+        background-image: var(--vs-gradient-soft);
+        border-color: rgba(84, 131, 179, 0.28);
+      }
+
+      .vs-accent-progress {
+        background-image: linear-gradient(90deg, var(--vs-800) 0%, var(--vs-500) 60%, var(--vs-300) 100%);
+      }
+
+      .vs-accent-focus:focus,
+      .vs-accent-focus:focus-visible {
+        border-color: var(--vs-500) !important;
+        box-shadow: 0 0 0 4px rgba(125, 160, 202, 0.16);
+        outline: none;
+      }
+
+      [class*="bg-gradient-to-r"][class*="from-orange-500"][class*="to-pink-600"],
+      [class*="bg-gradient-to-br"][class*="from-orange-500"][class*="to-pink-600"],
+      [class*="bg-gradient-to-br"][class*="from-orange-400"][class*="to-pink-500"],
+      [class*="bg-gradient-to-br"][class*="from-indigo-500"][class*="to-purple-600"],
+      [class*="bg-gradient-to-r"][class*="from-pink-500"][class*="via-purple-500"][class*="to-blue-500"],
+      [class*="bg-gradient-to-r"][class*="from-pink-500"][class*="to-purple-500"],
+      [class*="bg-gradient-to-r"][class*="from-pink-500"][class*="to-purple-600"],
+      [class*="bg-gradient-to-r"][class*="from-pink-500"][class*="to-purple-700"],
+      [class*="bg-gradient-to-r"][class*="from-pink-500"][class*="to-blue-500"],
+      [class*="bg-gradient-to-r"][class*="from-pink-500"][class*="to-purple-600"],
+      [class*="bg-gradient-to-r"][class*="from-emerald-500"][class*="to-teal-600"] {
+        background-image: var(--vs-gradient-main) !important;
+      }
+
+      [class*="bg-pink-600"],
+      [class*="bg-pink-500"] {
+        background-color: var(--vs-800) !important;
+      }
+
+      [class*="bg-pink-100"],
+      [class*="bg-pink-50"],
+      [class*="bg-orange-50"],
+      [class*="bg-orange-100"] {
+        background-color: rgba(193, 235, 255, 0.3) !important;
+      }
+
+      .dark [class*="bg-pink-500/10"],
+      .dark [class*="bg-orange-500/10"],
+      .dark [class*="bg-pink-600/10"],
+      .dark [class*="bg-pink-600/20"],
+      .dark [class*="bg-orange-500/15"] {
+        background-color: rgba(84, 131, 179, 0.16) !important;
+      }
+
+      [class*="text-pink-500"],
+      [class*="text-pink-600"],
+      [class*="text-orange-600"],
+      [class*="text-orange-300"] {
+        color: var(--vs-500) !important;
+      }
+
+      .dark [class*="text-pink-500"],
+      .dark [class*="text-pink-600"],
+      .dark [class*="text-orange-600"],
+      .dark [class*="text-orange-300"] {
+        color: var(--vs-300) !important;
+      }
+
+      [class*="border-pink-500"],
+      [class*="border-pink-600"],
+      [class*="border-orange-400"],
+      [class*="border-orange-300"],
+      [class*="border-orange-200"] {
+        border-color: var(--vs-accent-border) !important;
+      }
+
+      [class*="focus:border-pink-500"]:focus,
+      [class*="focus:border-orange-400"]:focus {
+        border-color: var(--vs-500) !important;
+      }
+
+      [class*="focus:ring-pink-500"]:focus,
+      [class*="focus:ring-pink-500/20"]:focus,
+      [class*="focus:ring-pink-500/40"]:focus {
+        box-shadow: 0 0 0 4px rgba(125, 160, 202, 0.16) !important;
+      }
+
+      [class*="hover:bg-pink-700"]:hover,
+      [class*="hover:bg-pink-600"]:hover {
+        background-color: var(--vs-950) !important;
+      }
+
+      [class*="hover:text-pink-500"]:hover,
+      [class*="hover:text-pink-600"]:hover {
+        color: var(--vs-500) !important;
+      }
+
+      .dark [class*="hover:text-pink-500"]:hover,
+      .dark [class*="hover:text-pink-600"]:hover {
+        color: var(--vs-300) !important;
       }
 
       @keyframes music-bars {

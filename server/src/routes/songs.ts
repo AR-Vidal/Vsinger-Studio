@@ -1,6 +1,10 @@
 import { Router, Response } from 'express';
 import { Readable } from 'node:stream';
+import { execSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import path from 'node:path';
 import { v4 as uuidv4 } from 'uuid';
+import { config } from '../config/index.js';
 import { pool } from '../db/pool.js';
 import { authMiddleware, optionalAuthMiddleware, AuthenticatedRequest } from '../middleware/auth.js';
 import { getStorageProvider } from '../services/storage/factory.js';
@@ -29,6 +33,51 @@ async function resolveAccessibleAudioUrl(audioUrl: string | null, isPublic: bool
     return isPublic ? storage.getPublicUrl(storageKey) : storage.getUrl(storageKey, 3600);
   }
   return audioUrl;
+}
+
+const SINGER_SELECT_FIELDS = `
+  s.singer_id,
+  s.singer_name_snapshot,
+  COALESCE(vs.name, s.singer_name_snapshot) AS singer_name,
+  CASE WHEN COALESCE(vs.name, s.singer_name_snapshot) IS NOT NULL THEN 1 ELSE 0 END AS has_singer
+`;
+
+function serializeSongRow<T extends Record<string, any>>(row: T) {
+  return {
+    ...row,
+    has_singer: Boolean(row.has_singer),
+  };
+}
+
+function probeDurationFromAudioUrl(audioUrl: string | null): number | null {
+  if (!audioUrl || !audioUrl.startsWith('/audio/')) return null;
+
+  const relativePath = audioUrl.replace('/audio/', '');
+  const audioPath = path.join(config.storage.audioDir, relativePath);
+  if (!existsSync(audioPath)) return null;
+
+  try {
+    const raw = execSync(
+      `ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${audioPath}"`,
+      { encoding: 'utf-8', timeout: 10000 },
+    );
+    const duration = Math.round(parseFloat(raw.trim()));
+    return Number.isFinite(duration) && duration > 0 ? duration : null;
+  } catch (error) {
+    console.warn('[Songs] Failed to probe duration:', audioPath, error);
+    return null;
+  }
+}
+
+async function normalizeSongForResponse<T extends Record<string, any>>(row: T, isPublic: boolean) {
+  const audioUrl = await resolveAccessibleAudioUrl(row.audio_url, isPublic);
+  const probedDuration = probeDurationFromAudioUrl(audioUrl);
+
+  return {
+    ...serializeSongRow(row),
+    audio_url: audioUrl,
+    duration: probedDuration ?? row.duration,
+  };
 }
 
 // Get audio - proxies from S3 to avoid CORS issues
@@ -108,19 +157,18 @@ router.get('/', authMiddleware, async (req: AuthenticatedRequest, res: Response)
       `SELECT s.id, s.title, s.lyrics, s.style, s.caption, s.cover_url, s.audio_url,
               s.duration, s.bpm, s.key_scale, s.time_signature, s.tags, s.is_public, 
               s.like_count, s.view_count, s.user_id, s.created_at, s.generation_params,
-              COALESCE(u.username, 'Anonymous') as creator
+              COALESCE(u.username, 'Anonymous') as creator,
+              ${SINGER_SELECT_FIELDS}
        FROM songs s
        LEFT JOIN users u ON s.user_id = u.id
+       LEFT JOIN virtual_singers vs ON s.singer_id = vs.id
        WHERE s.user_id = $1
        ORDER BY s.created_at DESC`,
       [req.user!.id]
     );
 
     const songs = await Promise.all(
-      result.rows.map(async (row) => ({
-        ...row,
-        audio_url: await resolveAccessibleAudioUrl(row.audio_url, row.is_public),
-      }))
+      result.rows.map((row) => normalizeSongForResponse(row, Boolean(row.is_public)))
     );
 
     res.json({ songs });
@@ -137,23 +185,24 @@ router.get('/public/featured', optionalAuthMiddleware, async (_req: Authenticate
     const result = await pool.query(
       `SELECT s.id, s.title, s.lyrics, s.style, s.caption, s.cover_url, s.audio_url,
               s.duration, s.bpm, s.key_scale, s.time_signature, s.tags, s.like_count, s.view_count, s.created_at, s.user_id,
-              COALESCE(u.username, 'Anonymous') as creator, u.avatar_url as creator_avatar, s.generation_params
+              COALESCE(u.username, 'Anonymous') as creator, u.avatar_url as creator_avatar, s.generation_params,
+              ${SINGER_SELECT_FIELDS}
        FROM songs s
        LEFT JOIN users u ON s.user_id = u.id
+       LEFT JOIN virtual_singers vs ON s.singer_id = vs.id
        ORDER BY RANDOM()
        LIMIT 20`
     );
 
     const songs = await Promise.all(
       result.rows.map(async (row) => ({
+        ...(await normalizeSongForResponse(row, true)),
         id: row.id,
         title: row.title,
         lyrics: row.lyrics,
         style: row.style,
         caption: row.caption,
         cover_url: row.cover_url,
-        audio_url: await resolveAccessibleAudioUrl(row.audio_url, true),
-        duration: row.duration,
         bpm: row.bpm,
         key_scale: row.key_scale,
         time_signature: row.time_signature,
@@ -164,7 +213,11 @@ router.get('/public/featured', optionalAuthMiddleware, async (_req: Authenticate
         creator: row.creator,
         creator_avatar: row.creator_avatar,
         user_id: row.user_id,
-        is_public: true
+        is_public: true,
+        singer_id: row.singer_id,
+        singer_name_snapshot: row.singer_name_snapshot,
+        singer_name: row.singer_name,
+        has_singer: Boolean(row.has_singer),
       }))
     );
 
@@ -184,9 +237,11 @@ router.get('/public', optionalAuthMiddleware, async (req: AuthenticatedRequest, 
     const result = await pool.query(
       `SELECT s.id, s.title, s.lyrics, s.style, s.caption, s.cover_url, s.audio_url,
               s.duration, s.bpm, s.key_scale, s.time_signature, s.tags, s.like_count, s.created_at,
-              COALESCE(u.username, 'Anonymous') as creator, s.generation_params
+              COALESCE(u.username, 'Anonymous') as creator, s.generation_params,
+              ${SINGER_SELECT_FIELDS}
        FROM songs s
        LEFT JOIN users u ON s.user_id = u.id
+       LEFT JOIN virtual_singers vs ON s.singer_id = vs.id
        WHERE s.is_public = true
        ORDER BY s.created_at DESC
        LIMIT $1 OFFSET $2`,
@@ -194,10 +249,7 @@ router.get('/public', optionalAuthMiddleware, async (req: AuthenticatedRequest, 
     );
 
     const songs = await Promise.all(
-      result.rows.map(async (row) => ({
-        ...row,
-        audio_url: await resolveAccessibleAudioUrl(row.audio_url, true),
-      }))
+      result.rows.map((row) => normalizeSongForResponse(row, true))
     );
 
     res.json({ songs });
@@ -213,9 +265,11 @@ router.get('/:id', optionalAuthMiddleware, async (req: AuthenticatedRequest, res
     const result = await pool.query(
       `SELECT s.id, s.user_id, s.title, s.lyrics, s.style, s.caption, s.cover_url, s.audio_url,
               s.duration, s.bpm, s.key_scale, s.time_signature, s.tags, s.is_public, s.like_count, s.view_count, s.created_at,
-              COALESCE(u.username, 'Anonymous') as creator, u.avatar_url as creator_avatar, s.generation_params
+              COALESCE(u.username, 'Anonymous') as creator, u.avatar_url as creator_avatar, s.generation_params,
+              ${SINGER_SELECT_FIELDS}
        FROM songs s
        LEFT JOIN users u ON s.user_id = u.id
+       LEFT JOIN virtual_singers vs ON s.singer_id = vs.id
        WHERE s.id = $1`,
       [req.params.id]
     );
@@ -233,10 +287,7 @@ router.get('/:id', optionalAuthMiddleware, async (req: AuthenticatedRequest, res
       return;
     }
 
-    const resolvedSong = {
-      ...song,
-      audio_url: await resolveAccessibleAudioUrl(song.audio_url, song.is_public),
-    };
+    const resolvedSong = await normalizeSongForResponse(song, Boolean(song.is_public));
 
     res.json({ song: resolvedSong });
   } catch (error) {
@@ -253,9 +304,11 @@ router.get('/:id/full', optionalAuthMiddleware, async (req: AuthenticatedRequest
         `SELECT s.id, s.user_id, s.title, s.lyrics, s.style, s.caption, s.cover_url, s.audio_url,
                 s.duration, s.bpm, s.key_scale, s.time_signature, s.tags, s.is_public,
                 s.like_count, s.view_count, s.created_at, s.generation_params,
-                COALESCE(u.username, 'Anonymous') as creator, u.avatar_url as creator_avatar
+                COALESCE(u.username, 'Anonymous') as creator, u.avatar_url as creator_avatar,
+                ${SINGER_SELECT_FIELDS}
          FROM songs s
          LEFT JOIN users u ON s.user_id = u.id
+         LEFT JOIN virtual_singers vs ON s.singer_id = vs.id
          WHERE s.id = $1`,
         [req.params.id]
       ),
@@ -286,10 +339,7 @@ router.get('/:id/full', optionalAuthMiddleware, async (req: AuthenticatedRequest
     // Increment view count
     await pool.query('UPDATE songs SET view_count = view_count + 1 WHERE id = $1', [req.params.id]);
 
-    const resolvedSong = {
-      ...song,
-      audio_url: await resolveAccessibleAudioUrl(song.audio_url, song.is_public),
-    };
+    const resolvedSong = await normalizeSongForResponse(song, Boolean(song.is_public));
 
     res.json({
       song: resolvedSong,
@@ -496,10 +546,12 @@ router.get('/liked/list', authMiddleware, async (req: AuthenticatedRequest, res:
     const result = await pool.query(
       `SELECT s.id, s.title, s.lyrics, s.style, s.cover_url, s.audio_url,
               s.duration, s.tags, s.like_count, s.created_at, s.is_public,
-              COALESCE(u.username, 'Anonymous') as creator, s.generation_params
+              COALESCE(u.username, 'Anonymous') as creator, s.generation_params,
+              ${SINGER_SELECT_FIELDS}
        FROM liked_songs ls
        JOIN songs s ON ls.song_id = s.id
        LEFT JOIN users u ON s.user_id = u.id
+       LEFT JOIN virtual_singers vs ON s.singer_id = vs.id
        WHERE ls.user_id = $1
        ORDER BY ls.liked_at DESC`,
       [req.user!.id]
@@ -507,7 +559,7 @@ router.get('/liked/list', authMiddleware, async (req: AuthenticatedRequest, res:
 
     const songs = await Promise.all(
       result.rows.map(async (row) => ({
-        ...row,
+        ...serializeSongRow(row),
         audio_url: await resolveAccessibleAudioUrl(row.audio_url, row.is_public),
       }))
     );

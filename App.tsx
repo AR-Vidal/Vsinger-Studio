@@ -11,17 +11,16 @@ import { UsernameModal } from './components/UsernameModal';
 import { UserProfile } from './components/UserProfile';
 import { SettingsModal } from './components/SettingsModal';
 import { SongProfile } from './components/SongProfile';
-import { Song, GenerationParams, View, Playlist } from './types';
-import { generateApi, songsApi, playlistsApi, getAudioUrl } from './services/api';
+import { Song, GenerationParams, View, Playlist, VirtualSinger } from './types';
+import { generateApi, songsApi, playlistsApi, singersApi, getAudioUrl } from './services/api';
 import { useAuth } from './context/AuthContext';
 import { useResponsive } from './context/ResponsiveContext';
 import { I18nProvider, useI18n } from './context/I18nContext';
 import { List } from 'lucide-react';
 import { PlaylistDetail } from './components/PlaylistDetail';
 import { Toast, ToastType } from './components/Toast';
-import { SearchPage } from './components/SearchPage';
 import { TrainingPanel } from './components/TrainingPanel';
-import { NewsPage } from './components/NewsPage';
+import { VirtualSingerManager } from './components/VirtualSingerManager';
 import { ConfirmDialog } from './components/ConfirmDialog';
 
 
@@ -33,18 +32,11 @@ function AppContent() {
   const { isMobile, isDesktop } = useResponsive();
 
   // Auth
-  const { user, token, isAuthenticated, isLoading: authLoading, setupUser, logout } = useAuth();
+  const { user, token, isAuthenticated, isLoading: authLoading, login, register, logout } = useAuth();
   const [showUsernameModal, setShowUsernameModal] = useState(false);
   // Track multiple concurrent generation jobs
   const activeJobsRef = useRef<Map<string, { tempId: string; pollInterval: ReturnType<typeof setInterval> }>>(new Map());
   const [activeJobCount, setActiveJobCount] = useState(0);
-
-  // Theme State
-  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
-    const stored = localStorage.getItem('theme');
-    if (stored === 'dark' || stored === 'light') return stored;
-    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-  });
 
   // Navigation State - default to create view
   const [currentView, setCurrentView] = useState<View>('create');
@@ -52,6 +44,7 @@ function AppContent() {
   // Content State
   const [songs, setSongs] = useState<Song[]>([]);
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
+  const [singers, setSingers] = useState<VirtualSinger[]>([]);
   const [likedSongIds, setLikedSongIds] = useState<Set<string>>(new Set());
   const [referenceTracks, setReferenceTracks] = useState<ReferenceTrack[]>([]);
   const [playQueue, setPlayQueue] = useState<Song[]>([]);
@@ -112,6 +105,7 @@ function AppContent() {
   const currentSongIdRef = useRef<string | null>(null);
   const pendingSeekRef = useRef<number | null>(null);
   const playNextRef = useRef<() => void>(() => {});
+  const knownDurationRef = useRef(0);
 
   // Mobile Details Modal State
   const [showMobileDetails, setShowMobileDetails] = useState(false);
@@ -165,6 +159,17 @@ function AppContent() {
     } else {
       setPlaylists([]);
     }
+  }, [token]);
+
+  useEffect(() => {
+    if (!token) {
+      setSingers([]);
+      return;
+    }
+
+    singersApi.list(token)
+      .then((res) => setSingers(res.singers))
+      .catch((err) => console.error('Failed to load singers', err));
   }, [token]);
 
   // Keep selectedSongRef in sync for use in callbacks without stale closures
@@ -232,19 +237,11 @@ function AppContent() {
     window.history.pushState({}, '', '/');
   };
 
-  // Theme Effect
+  // Force light mode
   useEffect(() => {
-    localStorage.setItem('theme', theme);
-    if (theme === 'dark') {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-  }, [theme]);
-
-  const toggleTheme = () => {
-    setTheme(prev => prev === 'dark' ? 'light' : 'dark');
-  };
+    localStorage.setItem('theme', 'light');
+    document.documentElement.classList.remove('dark');
+  }, []);
 
   // URL Routing Effect
   useEffect(() => {
@@ -266,6 +263,10 @@ function AppContent() {
         setMobileShowList(false);
       } else if (path === '/library') {
         setCurrentView('library');
+      } else if (path === '/management') {
+        setCurrentView('management');
+      } else if (path === '/training') {
+        setCurrentView('training');
       } else if (path.startsWith('/@')) {
         const username = path.substring(2);
         if (username) {
@@ -284,10 +285,8 @@ function AppContent() {
           setViewingPlaylistId(playlistId);
           setCurrentView('playlist');
         }
-      } else if (path === '/search') {
-        setCurrentView('search');
-      } else if (path === '/news') {
-        setCurrentView('news');
+      } else {
+        setCurrentView('create');
       }
     };
 
@@ -308,7 +307,7 @@ function AppContent() {
           songsApi.getLikedSongs(token)
         ]);
 
-        const mapSong = (s: any): Song => ({
+      const mapSong = (s: any): Song => ({
           id: s.id,
           title: s.title,
           lyrics: s.lyrics,
@@ -323,7 +322,11 @@ function AppContent() {
           viewCount: s.view_count || 0,
           userId: s.user_id,
           creator: s.creator,
-          ditModel: s.ditModel,
+          ditModel: s.dit_model || s.ditModel,
+          singerId: s.singer_id || s.singerId || null,
+          singerName: s.singer_name || s.singerName || s.singer_name_snapshot || null,
+          singerNameSnapshot: s.singer_name_snapshot || s.singerNameSnapshot || null,
+          hasSinger: Boolean(s.has_singer ?? s.hasSinger),
           generationParams: (() => {
             try {
               if (!s.generation_params) return undefined;
@@ -494,7 +497,28 @@ function AppContent() {
     const audio = audioRef.current;
     audio.volume = volume;
 
-    const onTimeUpdate = () => setCurrentTime(audio.currentTime);
+    const syncDuration = () => {
+      const reportedDuration = Number.isFinite(audio.duration) && audio.duration > 0 ? audio.duration : 0;
+      const knownDuration = knownDurationRef.current;
+
+      if (knownDuration > 0) {
+        if (reportedDuration > 0 && Math.abs(reportedDuration - knownDuration) <= 2) {
+          setDuration(reportedDuration);
+        } else {
+          setDuration(knownDuration);
+        }
+        return;
+      }
+
+      if (reportedDuration > 0) {
+        setDuration(reportedDuration);
+      }
+    };
+
+    const onTimeUpdate = () => {
+      setCurrentTime(audio.currentTime);
+      syncDuration();
+    };
     const applyPendingSeek = () => {
       if (pendingSeekRef.current === null) return;
       if (audio.seekable.length === 0) return;
@@ -508,16 +532,22 @@ function AppContent() {
     };
 
     const onLoadedMetadata = () => {
-      setDuration(audio.duration);
+      syncDuration();
       applyPendingSeek();
     };
 
     const onCanPlay = () => {
+      syncDuration();
       applyPendingSeek();
     };
 
     const onProgress = () => {
+      syncDuration();
       applyPendingSeek();
+    };
+
+    const onDurationChange = () => {
+      syncDuration();
     };
 
     const onEnded = () => {
@@ -540,6 +570,7 @@ function AppContent() {
     audio.addEventListener('loadedmetadata', onLoadedMetadata);
     audio.addEventListener('canplay', onCanPlay);
     audio.addEventListener('progress', onProgress);
+    audio.addEventListener('durationchange', onDurationChange);
     audio.addEventListener('ended', onEnded);
     audio.addEventListener('error', onError);
 
@@ -549,6 +580,7 @@ function AppContent() {
       audio.removeEventListener('loadedmetadata', onLoadedMetadata);
       audio.removeEventListener('canplay', onCanPlay);
       audio.removeEventListener('progress', onProgress);
+      audio.removeEventListener('durationchange', onDurationChange);
       audio.removeEventListener('ended', onEnded);
       audio.removeEventListener('error', onError);
     };
@@ -575,6 +607,12 @@ function AppContent() {
 
     if (currentSongIdRef.current !== currentSong.id) {
       currentSongIdRef.current = currentSong.id;
+      const [minutesPart = '0', secondsPart = '0'] = (currentSong.duration || '0:00').split(':');
+      const parsedDuration =
+        (Number.parseInt(minutesPart, 10) || 0) * 60 + (Number.parseInt(secondsPart, 10) || 0);
+      knownDurationRef.current = parsedDuration;
+      setCurrentTime(0);
+      setDuration(parsedDuration);
       audio.src = currentSong.audioUrl;
       audio.load();
       if (isPlaying) playAudio();
@@ -663,6 +701,10 @@ function AppContent() {
         userId: s.user_id,
         creator: s.creator,
         ditModel: s.ditModel,
+        singerId: s.singer_id || null,
+        singerName: s.singer_name || s.singer_name_snapshot || null,
+        singerNameSnapshot: s.singer_name_snapshot || null,
+        hasSinger: Boolean(s.has_singer),
         generationParams: (() => {
           try {
             if (!s.generation_params) return undefined;
@@ -762,8 +804,15 @@ function AppContent() {
     duration: '--:--',
     createdAt: createdAt ? new Date(createdAt) : new Date(),
     isGenerating: true,
-    tags: params.customMode ? ['custom'] : ['simple'],
+    tags: ['generated'],
     isPublic: true,
+    userId: user?.id,
+    creator: user?.username,
+    generationParams: params,
+    singerId: params.instrumental ? null : (params.singerId || null),
+    singerName: params.instrumental ? null : (singers.find((singer) => singer.id === params.singerId)?.name || null),
+    singerNameSnapshot: params.instrumental ? null : (singers.find((singer) => singer.id === params.singerId)?.name || null),
+    hasSinger: Boolean(!params.instrumental && params.singerId),
   });
 
   // Handlers
@@ -788,8 +837,15 @@ function AppContent() {
       duration: '--:--',
       createdAt: new Date(),
       isGenerating: true,
-      tags: params.customMode ? ['custom'] : ['simple'],
-      isPublic: true
+      tags: ['generated'],
+      isPublic: true,
+      userId: user?.id,
+      creator: user?.username,
+      generationParams: params,
+      singerId: params.instrumental ? null : (params.singerId || null),
+      singerName: params.instrumental ? null : (singers.find((singer) => singer.id === params.singerId)?.name || null),
+      singerNameSnapshot: params.instrumental ? null : (singers.find((singer) => singer.id === params.singerId)?.name || null),
+      hasSinger: Boolean(!params.instrumental && params.singerId),
     };
 
     setSongs(prev => [tempSong, ...prev]);
@@ -815,6 +871,7 @@ function AppContent() {
         randomSeed: params.randomSeed,
         seed: params.seed,
         thinking: params.thinking,
+        enhance: params.enhance,
         audioFormat: params.audioFormat,
         inferMethod: params.inferMethod,
         shift: params.shift,
@@ -852,6 +909,7 @@ function AppContent() {
         trackName: params.trackName,
         completeTrackClasses: params.completeTrackClasses,
         isFormatCaption: params.isFormatCaption,
+        singerId: params.instrumental ? null : params.singerId,
       }, token);
 
       beginPollingJob(job.jobId, tempId);
@@ -1204,8 +1262,12 @@ function AppContent() {
   };
 
   // Handle username setup
-  const handleUsernameSubmit = async (username: string) => {
-    await setupUser(username);
+  const handleUsernameSubmit = async (username: string, password: string, mode: 'login' | 'register') => {
+    if (mode === 'register') {
+      await register(username, password);
+    } else {
+      await login(username, password);
+    }
     setShowUsernameModal(false);
   };
 
@@ -1281,23 +1343,29 @@ function AppContent() {
           />
         );
 
-      case 'search':
+      case 'management':
         return (
-          <SearchPage
-            onPlaySong={playSong}
-            currentSong={currentSong}
-            isPlaying={isPlaying}
-            onNavigateToProfile={handleNavigateToProfile}
-            onNavigateToSong={handleNavigateToSong}
-            onNavigateToPlaylist={handleNavigateToPlaylist}
+          <VirtualSingerManager
+            singers={singers}
+            onSingersChange={setSingers}
+            onNavigateToTraining={() => {
+              setCurrentView('training');
+              window.history.pushState({}, '', '/training');
+            }}
           />
         );
 
       case 'training':
-        return <TrainingPanel />;
-
-      case 'news':
-        return <NewsPage />;
+        return (
+          <TrainingPanel
+            singers={singers}
+            onSingersChange={setSingers}
+            onNavigateToManagement={() => {
+              setCurrentView('management');
+              window.history.pushState({}, '', '/management');
+            }}
+          />
+        );
 
       case 'create':
       default:
@@ -1315,6 +1383,11 @@ function AppContent() {
                 createdSongs={songs}
                 pendingAudioSelection={pendingAudioSelection}
                 onAudioSelectionApplied={() => setPendingAudioSelection(null)}
+                singers={singers}
+                onNavigateToManagement={() => {
+                  setCurrentView('management');
+                  window.history.pushState({}, '', '/management');
+                }}
               />
             </div>
 
@@ -1388,7 +1461,7 @@ function AppContent() {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-white dark:bg-suno-DEFAULT text-zinc-900 dark:text-white font-sans antialiased selection:bg-pink-500/30 transition-colors duration-300">
+    <div className="flex flex-col h-screen bg-white dark:bg-suno-DEFAULT text-zinc-900 dark:text-white font-sans antialiased transition-colors duration-300">
       <div className="flex-1 flex overflow-hidden">
         <Sidebar
           currentView={currentView}
@@ -1399,15 +1472,13 @@ function AppContent() {
               window.history.pushState({}, '', '/');
             } else if (v === 'library') {
               window.history.pushState({}, '', '/library');
-            } else if (v === 'search') {
-              window.history.pushState({}, '', '/search');
-            } else if (v === 'news') {
-              window.history.pushState({}, '', '/news');
+            } else if (v === 'management') {
+              window.history.pushState({}, '', '/management');
+            } else if (v === 'training') {
+              window.history.pushState({}, '', '/training');
             }
             if (isMobile) setShowLeftSidebar(false);
           }}
-          theme={theme}
-          onToggleTheme={toggleTheme}
           user={user}
           onLogin={() => setShowUsernameModal(true)}
           onLogout={logout}
@@ -1482,8 +1553,6 @@ function AppContent() {
       <SettingsModal
         isOpen={showSettingsModal}
         onClose={() => setShowSettingsModal(false)}
-        theme={theme}
-        onToggleTheme={toggleTheme}
         onNavigateToProfile={handleNavigateToProfile}
       />
 

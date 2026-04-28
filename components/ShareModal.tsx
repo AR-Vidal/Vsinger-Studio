@@ -10,6 +10,10 @@ interface ShareModalProps {
   song: Song;
 }
 
+const getSongArtistName = (song: Song): string => (
+  song.singerName || song.singerNameSnapshot || '虚拟歌手'
+);
+
 const XIcon = () => (
   <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
     <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
@@ -60,13 +64,14 @@ export const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, song })
   if (!isOpen) return null;
 
   const shareUrl = `${window.location.origin}/song/${song.id}`;
+  const artistName = getSongArtistName(song);
 
   // Platform-specific share text for better engagement
-  const defaultShareText = `🎵 "${song.title}" ${song.style ? `(${song.style})` : ''} - Made with ACE-Step UI`;
-  const twitterText = `🔥 Just created "${song.title}" with ACE-Step UI - local AI music generation! ${song.style ? `#${song.style.replace(/\s+/g, '')}` : ''} #AIMusic #ACEStep`;
+  const defaultShareText = `"${song.title}" ${song.style ? `(${song.style})` : ''} - Made with ACE-Step UI`;
+  const twitterText = `Just created "${song.title}" with ACE-Step UI - local AI music generation! ${song.style ? `#${song.style.replace(/\s+/g, '')}` : ''} #AIMusic #ACEStep`;
   const redditTitle = `[AI Music] ${song.title} - ${song.style || 'Original'} | Created with ACE-Step UI`;
-  const whatsAppText = `🎧 Listen to this AI-generated song!\n\n"${song.title}" by ${song.creator || 'Unknown Artist'}\n${song.style ? `Genre: ${song.style}` : ''}\n\nMade with ACE-Step UI - free and open source!`;
-  const telegramText = `🎵 "${song.title}" by ${song.creator || 'Unknown Artist'}\n${song.style ? `🎸 ${song.style}` : ''}\n\n🤖 Made with ACE-Step UI`;
+  const whatsAppText = `Listen to this AI-generated song!\n\n"${song.title}" by ${artistName}\n${song.style ? `Genre: ${song.style}` : ''}\n\nMade with ACE-Step UI - free and open source!`;
+  const telegramText = `"${song.title}" by ${artistName}\n${song.style ? `${song.style}` : ''}\n\nMade with ACE-Step UI`;
   const linkedInText = `Check out this AI-generated music: "${song.title}" - Created locally with ACE-Step. #AIMusic #MusicTech #OpenSource`;
 
   const handleShareX = () => {
@@ -100,10 +105,10 @@ export const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, song })
   };
 
   const handleShareEmail = () => {
-    const subject = encodeURIComponent(`🎵 ${t('emailSubject')}: ${song.title}`);
+    const subject = encodeURIComponent(`${t('emailSubject')}: ${song.title}`);
     const bodyText = t('emailBody')
       .replace('{title}', song.title)
-      .replace('{creator}', song.creator || t('unknown'))
+      .replace('{creator}', artistName)
       .replace('{style}', song.style ? `${t('genres')}: ${song.style}` : '')
       .replace('{url}', shareUrl);
     const body = encodeURIComponent(bodyText);
@@ -231,3 +236,4 @@ export const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, song })
 
   return ReactDOM.createPortal(modalContent, document.body);
 };
+

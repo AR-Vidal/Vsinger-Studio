@@ -19,6 +19,7 @@ import {
   resolvePythonPath,
 } from '../services/acestep.js';
 import { getStorageProvider } from '../services/storage/factory.js';
+import { clearSingerVoice, ensureSingerVoice } from '../services/lora-manager.js';
 
 const router = Router();
 
@@ -44,6 +45,73 @@ function autoTitle(params: { title?: string; lyrics?: string; instrumental?: boo
   }
 
   return 'Untitled';
+}
+
+function hasText(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
+function normalizeSingerGender(value: unknown): 'female' | 'male' | null {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (normalized === 'female' || normalized === 'male') {
+    return normalized;
+  }
+
+  return null;
+}
+
+function inferCustomMode(body: GenerateBody): boolean {
+  const hasAdvancedControls =
+    hasText(body.lyrics) ||
+    hasText(body.title) ||
+    hasText(body.referenceAudioUrl) ||
+    hasText(body.sourceAudioUrl) ||
+    hasText(body.audioCodes) ||
+    hasText(body.instruction) ||
+    (typeof body.repaintingStart === 'number' && body.repaintingStart > 0) ||
+    (typeof body.repaintingEnd === 'number' && body.repaintingEnd >= 0) ||
+    (typeof body.audioCoverStrength === 'number' && body.audioCoverStrength !== 1) ||
+    (hasText(body.taskType) && body.taskType !== 'text2music') ||
+    body.useAdg === true ||
+    (typeof body.cfgIntervalStart === 'number' && body.cfgIntervalStart > 0) ||
+    (typeof body.cfgIntervalEnd === 'number' && body.cfgIntervalEnd < 1) ||
+    hasText(body.customTimesteps) ||
+    body.useCotMetas === false ||
+    body.useCotCaption === false ||
+    body.useCotLanguage === false ||
+    body.autogen === true ||
+    body.constrainedDecodingDebug === true ||
+    body.allowLmBatch === false ||
+    body.getScores === true ||
+    body.getLrc === true ||
+    (typeof body.scoreScale === 'number' && body.scoreScale !== 0.5) ||
+    (typeof body.lmBatchChunkSize === 'number' && body.lmBatchChunkSize !== 8) ||
+    hasText(body.trackName) ||
+    (Array.isArray(body.completeTrackClasses) && body.completeTrackClasses.length > 0) ||
+    body.isFormatCaption === true;
+
+  return hasAdvancedControls;
+}
+
+async function getBoundSinger(userId: string, singerId: string): Promise<{
+  id: string;
+  name: string;
+  gender: string | null;
+  adapter_path: string | null;
+} | null> {
+  const result = await pool.query(
+    `SELECT vs.id, vs.name, vs.gender, svb.adapter_path
+     FROM virtual_singers vs
+     LEFT JOIN singer_voice_binding svb ON svb.singer_id = vs.id
+     WHERE vs.id = ? AND vs.user_id = ?`,
+    [singerId, userId],
+  );
+
+  return (result.rows[0] as { id: string; name: string; gender: string | null; adapter_path: string | null } | undefined) ?? null;
 }
 
 const audioUpload = multer({
@@ -81,7 +149,7 @@ const audioUpload = multer({
 
 interface GenerateBody {
   // Mode
-  customMode: boolean;
+  customMode?: boolean;
 
   // Simple Mode
   songDescription?: string;
@@ -152,6 +220,7 @@ interface GenerateBody {
 
   // Model selection
   ditModel?: string;
+  singerId?: string | null;
 }
 
 router.post('/upload-audio', authMiddleware, (req: AuthenticatedRequest, res: Response, next: Function) => {
@@ -265,20 +334,57 @@ router.post('/', authMiddleware, async (req: AuthenticatedRequest, res: Response
       completeTrackClasses,
       isFormatCaption,
       ditModel,
+      singerId,
     } = req.body as GenerateBody;
 
-    if (!customMode && !songDescription) {
+    const inferredCustomMode = inferCustomMode(req.body as GenerateBody);
+    const normalizedSingerId = hasText(singerId) ? singerId.trim() : null;
+
+    if (!inferredCustomMode && !hasText(songDescription)) {
       res.status(400).json({ error: 'Song description required for simple mode' });
       return;
     }
 
-    if (customMode && !style && !lyrics && !referenceAudioUrl) {
-      res.status(400).json({ error: 'Style, lyrics, or reference audio required for custom mode' });
+    if (
+      inferredCustomMode &&
+      !hasText(songDescription) &&
+      !hasText(style) &&
+      !hasText(lyrics) &&
+      !hasText(referenceAudioUrl) &&
+      !hasText(sourceAudioUrl)
+    ) {
+      res.status(400).json({ error: 'Description, style, lyrics, or reference audio required' });
       return;
     }
 
+    let singerNameSnapshot: string | undefined;
+    let singerGender: 'female' | 'male' | undefined;
+
+    if (instrumental || !normalizedSingerId) {
+      try {
+        await clearSingerVoice();
+      } catch (error) {
+        console.warn('[Generate] Failed to clear active singer voice:', error);
+      }
+    } else {
+      const singer = await getBoundSinger(req.user!.id, normalizedSingerId);
+      if (!singer) {
+        res.status(404).json({ error: 'Selected singer not found' });
+        return;
+      }
+
+      if (!singer.adapter_path) {
+        res.status(400).json({ error: 'Selected singer has no bound voice. Please train and bind a voice first.' });
+        return;
+      }
+
+      await ensureSingerVoice(singer.adapter_path, 1.0);
+      singerNameSnapshot = singer.name;
+      singerGender = normalizeSingerGender(singer.gender) || undefined;
+    }
+
     const params = {
-      customMode,
+      customMode: inferredCustomMode,
       songDescription,
       lyrics,
       style,
@@ -333,6 +439,9 @@ router.post('/', authMiddleware, async (req: AuthenticatedRequest, res: Response
       completeTrackClasses,
       isFormatCaption,
       ditModel,
+      singerId: normalizedSingerId || undefined,
+      singerNameSnapshot,
+      singerGender,
     };
 
     // Create job record in database
@@ -417,11 +526,23 @@ router.get('/status/:jobId', authMiddleware, async (req: AuthenticatedRequest, r
             });
             const localPaths: string[] = [];
             const storage = getStorageProvider();
+            const singerIdValue = typeof params.singerId === 'string' ? params.singerId : null;
+            const singerNameValue = typeof params.singerNameSnapshot === 'string' ? params.singerNameSnapshot : null;
 
             for (let i = 0; i < audioUrls.length; i++) {
               const audioUrl = audioUrls[i];
               const variationSuffix = audioUrls.length > 1 ? ` (v${i + 1})` : '';
-              const songTitle = autoTitle(params) + variationSuffix;
+              const generatedLyrics = params.instrumental
+                ? '[Instrumental]'
+                : (aceStatus.result.lyrics || params.lyrics || '');
+              const generatedCaption = aceStatus.result.caption || params.style || params.songDescription || '';
+              const songStyle = params.style || generatedCaption || params.songDescription || '';
+              const storedParams = {
+                ...params,
+                lyrics: generatedLyrics,
+                generatedCaption,
+              };
+              const songTitle = autoTitle({ ...storedParams, style: songStyle }) + variationSuffix;
 
               const songId = generateUUID();
 
@@ -435,22 +556,25 @@ router.get('/status/:jobId', authMiddleware, async (req: AuthenticatedRequest, r
                 await pool.query(
                   `INSERT INTO songs (id, user_id, title, lyrics, style, caption, audio_url,
                                       duration, bpm, key_scale, time_signature, tags, is_public, generation_params,
+                                      singer_id, singer_name_snapshot,
                                       created_at, updated_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, datetime('now'), datetime('now'))`,
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, datetime('now'), datetime('now'))`,
                   [
                     songId,
                     req.user!.id,
                     songTitle,
-                    params.instrumental ? '[Instrumental]' : params.lyrics,
-                    params.style,
-                    params.style,
+                    generatedLyrics,
+                    songStyle,
+                    generatedCaption,
                     storedPath,
                     aceStatus.result.duration && aceStatus.result.duration > 0 ? aceStatus.result.duration : (params.duration && params.duration > 0 ? params.duration : 0),
                     aceStatus.result.bpm || params.bpm,
                     aceStatus.result.keyScale || params.keyScale,
                     aceStatus.result.timeSignature || params.timeSignature,
                     JSON.stringify([]),
-                    JSON.stringify(params),
+                    JSON.stringify(storedParams),
+                    singerIdValue,
+                    singerNameValue,
                   ]
                 );
 
@@ -461,22 +585,25 @@ router.get('/status/:jobId', authMiddleware, async (req: AuthenticatedRequest, r
                 await pool.query(
                   `INSERT INTO songs (id, user_id, title, lyrics, style, caption, audio_url,
                                       duration, bpm, key_scale, time_signature, tags, is_public, generation_params,
+                                      singer_id, singer_name_snapshot,
                                       created_at, updated_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, datetime('now'), datetime('now'))`,
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, datetime('now'), datetime('now'))`,
                   [
                     songId,
                     req.user!.id,
                     songTitle,
-                    params.instrumental ? '[Instrumental]' : params.lyrics,
-                    params.style,
-                    params.style,
+                    generatedLyrics,
+                    songStyle,
+                    generatedCaption,
                     audioUrl,
                     aceStatus.result.duration && aceStatus.result.duration > 0 ? aceStatus.result.duration : (params.duration && params.duration > 0 ? params.duration : 0),
                     aceStatus.result.bpm || params.bpm,
                     aceStatus.result.keyScale || params.keyScale,
                     aceStatus.result.timeSignature || params.timeSignature,
                     JSON.stringify([]),
-                    JSON.stringify(params),
+                    JSON.stringify(storedParams),
+                    singerIdValue,
+                    singerNameValue,
                   ]
                 );
                 localPaths.push(audioUrl);

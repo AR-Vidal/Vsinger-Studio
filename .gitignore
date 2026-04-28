@@ -66,6 +66,8 @@ Thumbs.db
 
 # Cache
 .cache/
+.npm-cache/
+server/.npm-cache/
 *.cache
 
 # Test coverage

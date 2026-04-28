@@ -36,6 +36,10 @@ interface PlayerProps {
     onPlayFirst?: () => void;
 }
 
+const getSongArtistName = (song: Song): string => (
+    song.singerName || song.singerNameSnapshot || '虚拟歌手'
+);
+
 export const Player: React.FC<PlayerProps> = ({
     currentSong,
     isPlaying,
@@ -132,7 +136,7 @@ export const Player: React.FC<PlayerProps> = ({
         onSeek(percentage * duration);
     };
 
-    const progressPercent = duration ? (currentTime / duration) * 100 : 0;
+    const progressPercent = duration ? Math.min(100, Math.max(0, (currentTime / duration) * 100)) : 0;
 
     const handleDownload = async () => {
         if (!currentSong?.audioUrl) return;
@@ -197,12 +201,12 @@ export const Player: React.FC<PlayerProps> = ({
                                     {currentSong.title}
                                 </h2>
                                 <p className="text-sm text-zinc-500 dark:text-white/60 truncate mt-1">
-                                    {currentSong.creator || 'Unknown Artist'}
+                                    {getSongArtistName(currentSong)}
                                 </p>
                             </div>
                             <button
                                 onClick={onToggleLike}
-                                className={`p-2 tap-highlight-none ${isLiked ? 'text-pink-600 dark:text-pink-500' : 'text-zinc-400 dark:text-white/50'}`}
+                                className={`p-2 tap-highlight-none ${isLiked ? 'vs-accent-text' : 'text-zinc-400 dark:text-white/50'}`}
                             >
                                 <Heart size={24} fill={isLiked ? "currentColor" : "none"} />
                             </button>
@@ -233,7 +237,7 @@ export const Player: React.FC<PlayerProps> = ({
                     <div className="flex items-center justify-center gap-8 py-4">
                         <button
                             onClick={onToggleShuffle}
-                            className={`p-2 tap-highlight-none ${isShuffle ? 'text-pink-600 dark:text-pink-500' : 'text-zinc-400 dark:text-white/50'}`}
+                            className={`p-2 tap-highlight-none ${isShuffle ? 'vs-accent-text' : 'text-zinc-400 dark:text-white/50'}`}
                         >
                             <Shuffle size={22} />
                         </button>
@@ -245,7 +249,7 @@ export const Player: React.FC<PlayerProps> = ({
                         </button>
                         <button
                             onClick={onTogglePlay}
-                            className="w-16 h-16 rounded-full bg-zinc-900 dark:bg-white text-white dark:text-black flex items-center justify-center shadow-lg tap-highlight-none"
+                            className="vs-gradient-button w-16 h-16 rounded-full flex items-center justify-center text-white shadow-lg tap-highlight-none"
                         >
                             {isPlaying ? <Pause size={32} fill="currentColor" /> : <Play size={32} fill="currentColor" className="ml-1" />}
                         </button>
@@ -257,7 +261,7 @@ export const Player: React.FC<PlayerProps> = ({
                         </button>
                         <button
                             onClick={onToggleRepeat}
-                            className={`p-2 tap-highlight-none relative ${repeatMode !== 'none' ? 'text-pink-600 dark:text-pink-500' : 'text-zinc-400 dark:text-white/50'}`}
+                            className={`p-2 tap-highlight-none relative ${repeatMode !== 'none' ? 'vs-accent-text' : 'text-zinc-400 dark:text-white/50'}`}
                         >
                             {repeatMode === 'one' ? <Repeat1 size={22} /> : <Repeat size={22} />}
                         </button>
@@ -276,7 +280,7 @@ export const Player: React.FC<PlayerProps> = ({
                                 className="w-32 h-8 -rotate-90 origin-center appearance-none bg-transparent cursor-pointer"
                                 style={{
                                     WebkitAppearance: 'none',
-                                    background: `linear-gradient(to right, rgb(236 72 153) 0%, rgb(236 72 153) ${volume * 100}%, rgb(228 228 231) ${volume * 100}%, rgb(228 228 231) 100%)`
+                                    background: `linear-gradient(to right, #052659 0%, #5483B3 ${volume * 100}%, rgb(228 228 231) ${volume * 100}%, rgb(228 228 231) 100%)`
                                 }}
                             />
                         </div>
@@ -346,7 +350,7 @@ export const Player: React.FC<PlayerProps> = ({
                     onClick={(e) => handleSeekInteraction(e, progressBarRef)}
                 >
                     <div
-                        className="h-full bg-pink-600 dark:bg-pink-500"
+                        className="vs-accent-progress h-full"
                         style={{ width: `${progressPercent}%` }}
                     />
                 </div>
@@ -372,7 +376,7 @@ export const Player: React.FC<PlayerProps> = ({
                                 {currentSong.title}
                             </h4>
                             <p className="text-xs text-zinc-500 dark:text-zinc-400 truncate">
-                                {currentSong.creator || 'Unknown Artist'}
+                                {getSongArtistName(currentSong)}
                             </p>
                         </div>
                     </div>
@@ -381,7 +385,7 @@ export const Player: React.FC<PlayerProps> = ({
                     <div className="flex items-center gap-1 flex-shrink-0">
                         <button
                             onClick={onToggleLike}
-                            className={`p-2 tap-highlight-none ${isLiked ? 'text-pink-600 dark:text-pink-500' : 'text-zinc-400'}`}
+                            className={`p-2 tap-highlight-none ${isLiked ? 'vs-accent-text' : 'text-zinc-400'}`}
                         >
                             <Heart size={20} fill={isLiked ? "currentColor" : "none"} />
                         </button>
@@ -393,7 +397,7 @@ export const Player: React.FC<PlayerProps> = ({
                         </button>
                         <button
                             onClick={onTogglePlay}
-                            className="w-11 h-11 rounded-full bg-zinc-900 dark:bg-white text-white dark:text-black flex items-center justify-center shadow-lg tap-highlight-none"
+                            className="vs-gradient-button w-11 h-11 rounded-full flex items-center justify-center text-white shadow-lg tap-highlight-none"
                         >
                             {isPlaying ? <Pause size={22} fill="currentColor" /> : <Play size={22} fill="currentColor" className="ml-0.5" />}
                         </button>
@@ -458,7 +462,7 @@ export const Player: React.FC<PlayerProps> = ({
                                     {currentSong.title}
                                 </h2>
                                 <p className="text-base lg:text-lg text-zinc-500 dark:text-white/60 truncate mt-2">
-                                    {currentSong.creator || 'Unknown Artist'}
+                                    {getSongArtistName(currentSong)}
                                 </p>
                             </div>
 
@@ -470,10 +474,10 @@ export const Player: React.FC<PlayerProps> = ({
                                     onClick={(e) => handleSeekInteraction(e, fullscreenProgressRef)}
                                 >
                                     <div
-                                        className="h-full bg-zinc-900 dark:bg-white rounded-full relative group-hover:bg-pink-600 dark:group-hover:bg-pink-500 transition-colors"
+                                        className="h-full bg-zinc-900 dark:bg-white rounded-full relative group-hover:bg-[#5483B3] dark:group-hover:bg-[#7DA0CA] transition-colors"
                                         style={{ width: `${progressPercent}%` }}
                                     >
-                                        <div className="absolute right-0 top-1/2 -translate-y-1/2 w-4 h-4 bg-zinc-900 dark:bg-white group-hover:bg-pink-600 dark:group-hover:bg-pink-500 rounded-full shadow-lg -mr-2 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                        <div className="absolute right-0 top-1/2 -translate-y-1/2 w-4 h-4 bg-zinc-900 dark:bg-white group-hover:bg-[#5483B3] dark:group-hover:bg-[#7DA0CA] rounded-full shadow-lg -mr-2 opacity-0 group-hover:opacity-100 transition-opacity" />
                                     </div>
                                 </div>
                                 <div className="flex justify-between mt-2 text-sm text-zinc-500 dark:text-white/50 font-mono">
@@ -486,7 +490,7 @@ export const Player: React.FC<PlayerProps> = ({
                             <div className="flex items-center justify-center gap-8 py-2 w-full">
                                 <button
                                     onClick={onToggleShuffle}
-                                    className={`p-2 transition-colors ${isShuffle ? 'text-pink-600 dark:text-pink-500' : 'text-zinc-400 hover:text-zinc-900 dark:hover:text-white'}`}
+                                    className={`p-2 transition-colors ${isShuffle ? 'vs-accent-text' : 'text-zinc-400 hover:text-zinc-900 dark:hover:text-white'}`}
                                 >
                                     <Shuffle size={22} />
                                 </button>
@@ -498,7 +502,7 @@ export const Player: React.FC<PlayerProps> = ({
                                 </button>
                                 <button
                                     onClick={onTogglePlay}
-                                    className="w-18 h-18 p-5 rounded-full bg-zinc-900 dark:bg-white text-white dark:text-black flex items-center justify-center shadow-lg hover:scale-105 transition-transform"
+                                    className="vs-gradient-button w-18 h-18 p-5 rounded-full flex items-center justify-center text-white shadow-lg hover:scale-105 transition-transform"
                                 >
                                     {isPlaying ? <Pause size={36} fill="currentColor" /> : <Play size={36} fill="currentColor" className="ml-1" />}
                                 </button>
@@ -510,7 +514,7 @@ export const Player: React.FC<PlayerProps> = ({
                                 </button>
                                 <button
                                     onClick={onToggleRepeat}
-                                    className={`p-2 transition-colors relative ${repeatMode !== 'none' ? 'text-pink-600 dark:text-pink-500' : 'text-zinc-400 hover:text-zinc-900 dark:hover:text-white'}`}
+                                    className={`p-2 transition-colors relative ${repeatMode !== 'none' ? 'vs-accent-text' : 'text-zinc-400 hover:text-zinc-900 dark:hover:text-white'}`}
                                 >
                                     {repeatMode === 'one' ? <Repeat1 size={22} /> : <Repeat size={22} />}
                                     {repeatMode !== 'none' && <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-current rounded-full"></div>}
@@ -535,7 +539,7 @@ export const Player: React.FC<PlayerProps> = ({
                                                     setShowSpeedMenu(false);
                                                 }}
                                                 className={`w-full px-3 py-1.5 text-left text-xs font-mono hover:bg-zinc-100 dark:hover:bg-white/10 transition-colors ${
-                                                    playbackRate === rate ? 'text-pink-600 dark:text-pink-500 font-bold' : 'text-zinc-700 dark:text-zinc-300'
+                                                    playbackRate === rate ? 'vs-accent-text font-bold' : 'text-zinc-700 dark:text-zinc-300'
                                                 }`}
                                             >
                                                 {rate === 1.0 ? t('normalSpeed') : `${rate}x`}
@@ -564,7 +568,7 @@ export const Player: React.FC<PlayerProps> = ({
                                         className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
                                     />
                                     <div
-                                        className="h-full bg-zinc-700 dark:bg-white/70 rounded-full"
+                                        className="vs-accent-progress h-full rounded-full"
                                         style={{ width: `${volume * 100}%` }}
                                     />
                                     <div
@@ -580,7 +584,7 @@ export const Player: React.FC<PlayerProps> = ({
                             <div className="flex items-center justify-center gap-4 text-zinc-400 dark:text-white/50">
                                 <button
                                     onClick={onToggleLike}
-                                    className={`p-3 rounded-full hover:bg-zinc-200 dark:hover:bg-white/10 transition-colors ${isLiked ? 'text-pink-600 dark:text-pink-500' : ''}`}
+                                        className={`p-3 rounded-full hover:bg-zinc-200 dark:hover:bg-white/10 transition-colors ${isLiked ? 'vs-accent-text' : ''}`}
                                 >
                                     <Heart size={22} fill={isLiked ? "currentColor" : "none"} />
                                 </button>
@@ -646,10 +650,10 @@ export const Player: React.FC<PlayerProps> = ({
                 onClick={(e) => handleSeekInteraction(e, progressBarRef)}
             >
                 <div
-                    className="h-full bg-zinc-900 dark:bg-white relative group-hover:bg-pink-600 dark:group-hover:bg-pink-500 transition-colors"
+                    className="h-full bg-zinc-900 dark:bg-white relative group-hover:bg-[#5483B3] dark:group-hover:bg-[#7DA0CA] transition-colors"
                     style={{ width: `${progressPercent}%` }}
                 >
-                    <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 bg-zinc-900 dark:bg-white group-hover:bg-pink-600 dark:group-hover:bg-pink-500 rounded-full shadow-lg -mr-2 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 bg-zinc-900 dark:bg-white group-hover:bg-[#5483B3] dark:group-hover:bg-[#7DA0CA] rounded-full shadow-lg -mr-2 opacity-0 group-hover:opacity-100 transition-opacity" />
                 </div>
                 {/* Hit area for easier clicking */}
                 <div className="absolute top-1/2 -translate-y-1/2 w-full h-4 -z-10"></div>
@@ -672,11 +676,11 @@ export const Player: React.FC<PlayerProps> = ({
                         >
                             {currentSong.title}
                         </h4>
-                        <p className="text-[10px] sm:text-xs text-zinc-500 dark:text-zinc-400 truncate hover:underline cursor-pointer">{currentSong.creator || 'Unknown Artist'}</p>
+                        <p className="text-[10px] sm:text-xs text-zinc-500 dark:text-zinc-400 truncate">{getSongArtistName(currentSong)}</p>
                     </div>
                     <button
                         onClick={onToggleLike}
-                        className={`ml-1 sm:ml-2 transition-colors flex-shrink-0 hidden sm:block ${isLiked ? 'text-pink-600 dark:text-pink-500' : 'text-zinc-400 hover:text-zinc-900 dark:hover:text-white'}`}
+                        className={`ml-1 sm:ml-2 transition-colors flex-shrink-0 hidden sm:block ${isLiked ? 'vs-accent-text' : 'text-zinc-400 hover:text-zinc-900 dark:hover:text-white'}`}
                     >
                         <Heart size={18} fill={isLiked ? "currentColor" : "none"} />
                     </button>
@@ -687,7 +691,7 @@ export const Player: React.FC<PlayerProps> = ({
                     <div className="flex items-center gap-2 sm:gap-4 lg:gap-6">
                         <button
                             onClick={onToggleShuffle}
-                            className={`transition-colors hidden sm:block ${isShuffle ? 'text-pink-600 dark:text-pink-500' : 'text-zinc-400 hover:text-zinc-900 dark:hover:text-white'}`}
+                            className={`transition-colors hidden sm:block ${isShuffle ? 'vs-accent-text' : 'text-zinc-400 hover:text-zinc-900 dark:hover:text-white'}`}
                         >
                             <Shuffle size={16} />
                         </button>
@@ -699,7 +703,7 @@ export const Player: React.FC<PlayerProps> = ({
                         </button>
                         <button
                             onClick={onTogglePlay}
-                            className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-zinc-900 dark:bg-white text-white dark:text-black flex items-center justify-center hover:scale-105 transition-transform shadow-lg"
+                            className="vs-gradient-button w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center text-white hover:scale-105 transition-transform shadow-lg"
                         >
                             {isPlaying ? <Pause size={18} className="sm:w-5 sm:h-5" fill="currentColor" /> : <Play size={18} className="sm:w-5 sm:h-5 ml-0.5" fill="currentColor" />}
                         </button>
@@ -711,7 +715,7 @@ export const Player: React.FC<PlayerProps> = ({
                         </button>
                         <button
                             onClick={onToggleRepeat}
-                            className={`transition-colors hidden sm:block ${repeatMode !== 'none' ? 'text-pink-600 dark:text-pink-500' : 'text-zinc-400 hover:text-zinc-900 dark:hover:text-white'} relative`}
+                            className={`transition-colors hidden sm:block ${repeatMode !== 'none' ? 'vs-accent-text' : 'text-zinc-400 hover:text-zinc-900 dark:hover:text-white'} relative`}
                         >
                             {repeatMode === 'one' ? <Repeat1 size={16} /> : <Repeat size={16} />}
                             {repeatMode !== 'none' && <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-1 h-1 bg-current rounded-full"></div>}
@@ -743,7 +747,7 @@ export const Player: React.FC<PlayerProps> = ({
                                             setShowSpeedMenu(false);
                                         }}
                                         className={`w-full px-3 py-1.5 text-left text-xs font-mono hover:bg-zinc-100 dark:hover:bg-white/10 transition-colors ${
-                                            playbackRate === rate ? 'text-pink-600 dark:text-pink-500 font-bold' : 'text-zinc-700 dark:text-zinc-300'
+                                            playbackRate === rate ? 'vs-accent-text font-bold' : 'text-zinc-700 dark:text-zinc-300'
                                         }`}
                                     >
                                         {rate === 1.0 ? t('normalSpeed') : `${rate}x`}
@@ -786,7 +790,7 @@ export const Player: React.FC<PlayerProps> = ({
                                             className="w-24 h-8 -rotate-90 origin-center appearance-none bg-transparent cursor-pointer"
                                             style={{
                                                 WebkitAppearance: 'none',
-                                                background: `linear-gradient(to right, rgb(236 72 153) 0%, rgb(236 72 153) ${volume * 100}%, rgb(228 228 231) ${volume * 100}%, rgb(228 228 231) 100%)`
+                                                background: `linear-gradient(to right, #052659 0%, #5483B3 ${volume * 100}%, rgb(228 228 231) ${volume * 100}%, rgb(228 228 231) 100%)`
                                             }}
                                         />
                                     </div>

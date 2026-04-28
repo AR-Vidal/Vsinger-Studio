@@ -126,10 +126,15 @@ router.get('/:id', optionalAuthMiddleware, async (req: AuthenticatedRequest, res
         // Get songs
         const songsResult = await pool.query(
             `SELECT s.id, s.title, s.lyrics, s.style, s.cover_url, s.audio_url, s.duration,
-                    s.user_id, s.is_public, u.username as creator, ps.added_at, ps.position
+                    s.user_id, s.is_public, u.username as creator,
+                    s.singer_id, s.singer_name_snapshot,
+                    COALESCE(vs.name, s.singer_name_snapshot) AS singer_name,
+                    CASE WHEN COALESCE(vs.name, s.singer_name_snapshot) IS NOT NULL THEN 1 ELSE 0 END AS has_singer,
+                    ps.added_at, ps.position
              FROM playlist_songs ps
              JOIN songs s ON ps.song_id = s.id
              JOIN users u ON s.user_id = u.id
+             LEFT JOIN virtual_singers vs ON s.singer_id = vs.id
              WHERE ps.playlist_id = $1
              ORDER BY ps.position ASC`,
             [req.params.id]
