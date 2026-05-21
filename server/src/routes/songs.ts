@@ -533,7 +533,7 @@ router.get('/liked/list', authMiddleware, async (req: AuthenticatedRequest, res:
   try {
     const result = await pool.query(
       `SELECT s.id, s.title, s.lyrics, s.style, s.cover_url, s.audio_url,
-              s.duration, s.tags, s.like_count, s.created_at, s.is_public,
+              s.duration, s.tags, s.like_count, s.view_count, s.user_id, s.created_at, s.is_public,
               COALESCE(u.username, 'Anonymous') as creator, s.generation_params,
               ${SINGER_SELECT_FIELDS}
        FROM liked_songs ls

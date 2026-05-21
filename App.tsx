@@ -341,7 +341,10 @@ function AppContent() {
         const likedSongs = likedSongsRes.songs.map(mapSong);
 
         const songsMap = new Map<string, Song>();
-        [...librarySongs, ...likedSongs].forEach(s => songsMap.set(s.id, s));
+        [...librarySongs, ...likedSongs].forEach(s => {
+          const existing = songsMap.get(s.id);
+          songsMap.set(s.id, existing && !s.userId ? existing : { ...existing, ...s });
+        });
 
         // Preserve any generating songs (temp songs)
         setSongs(prev => {

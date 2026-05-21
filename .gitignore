@@ -45,6 +45,7 @@ pnpm-debug.log*
 lerna-debug.log*
 
 # Editor/IDE
+.claude/
 .vscode/*
 !.vscode/extensions.json
 .idea/
@@ -90,6 +91,9 @@ __pycache__/
 ComfyUI/
 comfyui/
 ACE-Step-1.5/
+public/*.webp
+public/*.jpg
+!public/logo.png
 
 # External editors (wavacity is 184MB - clone separately if needed)
 wavacity-editor/

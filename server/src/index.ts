@@ -25,7 +25,6 @@ import referenceTrackRoutes from './routes/referenceTrack.js';
 import loraRoutes from './routes/lora.js';
 import trainingRoutes from './routes/training.js';
 import singersRoutes from './routes/singers.js';
-import { pool } from './db/pool.js';
 import './db/migrate.js';
 
 const app = express();
@@ -108,122 +107,6 @@ app.use('/demucs-web', (req, res, next) => {
 // Health check
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', service: 'VsingerStudio API' });
-});
-
-// oEmbed endpoint for rich embeds
-app.get('/api/oembed', async (req, res) => {
-  const url = req.query.url as string;
-  if (!url) {
-    res.status(400).json({ error: 'URL required' });
-    return;
-  }
-
-  const match = url.match(/\/song\/([a-zA-Z0-9-]+)/);
-  if (!match) {
-    res.status(404).json({ error: 'Song not found' });
-    return;
-  }
-
-  try {
-    const result = await pool.query(
-      `SELECT s.id, s.title, s.style, s.cover_url, s.duration,
-              COALESCE(vs.name, s.singer_name_snapshot, '虚拟歌手') as artist_name
-       FROM songs s
-       LEFT JOIN users u ON s.user_id = u.id
-       LEFT JOIN virtual_singers vs ON s.singer_id = vs.id
-       WHERE s.id = ? AND s.is_public = 1`,
-      [match[1]]
-    );
-
-    if (result.rows.length === 0) {
-      res.status(404).json({ error: 'Song not found' });
-      return;
-    }
-
-    const song = result.rows[0];
-    res.json({
-      version: '1.0',
-      type: 'rich',
-      provider_name: 'VsingerStudio',
-      provider_url: config.frontendUrl,
-      title: song.title,
-      author_name: song.artist_name,
-      thumbnail_url: song.cover_url,
-      thumbnail_width: 400,
-      thumbnail_height: 400,
-      html: `<iframe src="${config.frontendUrl}/embed/${song.id}" width="100%" height="152" frameborder="0" allow="autoplay; encrypted-media" allowfullscreen></iframe>`,
-      width: 400,
-      height: 152
-    });
-  } catch (error) {
-    console.error('oEmbed error:', error);
-    res.status(500).json({ error: 'Internal error' });
-  }
-});
-
-// Song share page handler
-app.get('/song/:id', async (req, res) => {
-  const songId = req.params.id;
-  const userAgent = req.get('User-Agent') || '';
-
-  // Check if request is from a social media bot
-  const isSocialBot = /twitterbot|facebookexternalhit|linkedinbot|slackbot|redditbot|discordbot|telegrambot|whatsapp|pinterestbot|tumblr|embedly|quora|outbrain|vkshare|w3c_validator|baiduspider|bingbot/i.test(userAgent);
-
-  if (!isSocialBot) {
-    res.redirect(`${config.frontendUrl}?song=${songId}`);
-    return;
-  }
-
-  try {
-    const result = await pool.query(
-      `SELECT s.id, s.title, s.style, s.cover_url, s.audio_url, s.duration, s.like_count, s.view_count,
-              COALESCE(vs.name, s.singer_name_snapshot, '虚拟歌手') as artist_name
-       FROM songs s
-       LEFT JOIN users u ON s.user_id = u.id
-       LEFT JOIN virtual_singers vs ON s.singer_id = vs.id
-       WHERE s.id = ? AND s.is_public = 1`,
-      [songId]
-    );
-
-    if (result.rows.length === 0) {
-      res.redirect(config.frontendUrl);
-      return;
-    }
-
-    const song = result.rows[0];
-    const coverUrl = song.cover_url || `https://picsum.photos/seed/${song.id}/1200/630`;
-    const title = `${song.title} by ${song.artist_name}`;
-    const description = `🎵 ${song.style} • Create your own virtual singer music with VsingerStudio`;
-    const pageUrl = `${config.frontendUrl}/song/${song.id}`;
-
-    res.send(`<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${title} | VsingerStudio</title>
-  <meta name="title" content="${title}">
-  <meta name="description" content="${description}">
-  <meta property="og:type" content="music.song">
-  <meta property="og:url" content="${pageUrl}">
-  <meta property="og:title" content="${title}">
-  <meta property="og:description" content="${description}">
-  <meta property="og:image" content="${coverUrl}">
-  <meta property="og:site_name" content="VsingerStudio">
-  <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="${title}">
-  <meta name="twitter:description" content="${description}">
-  <meta name="twitter:image" content="${coverUrl}">
-  <meta http-equiv="refresh" content="0;url=${config.frontendUrl}?song=${song.id}">
-</head>
-<body>
-  <p>Redirecting to <a href="${config.frontendUrl}?song=${song.id}">VsingerStudio</a>...</p>
-</body>
-</html>`);
-  } catch (error) {
-    console.error('Error serving song share page:', error);
-    res.redirect(config.frontendUrl);
-  }
 });
 
 // Image proxy for CORS

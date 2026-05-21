@@ -51,7 +51,6 @@ export const translations = {
     save: 'Save',
     delete: 'Delete',
     edit: 'Edit',
-    share: 'Share',
     download: 'Download',
     play: 'Play',
     pause: 'Pause',
@@ -389,6 +388,7 @@ export const translations = {
     noSongsFound: 'No songs found matching',
     genres: 'Genres',
     songs: 'songs',
+    allSongs: 'All songs',
     
     // Library View
     yourLibrary: 'Your Library',
@@ -486,19 +486,6 @@ export const translations = {
     songNotFound: 'Song not found',
     similar: 'Similar',
     by: 'By',
-    
-    // ShareModal
-    shareSong: 'Share Song',
-    shareOnX: 'Share on X',
-    shareOnFacebook: 'Share on Facebook',
-    shareOnWhatsApp: 'Share on WhatsApp',
-    shareOnTelegram: 'Share on Telegram',
-    shareOnReddit: 'Share on Reddit',
-    shareOnLinkedIn: 'Share on LinkedIn',
-    shareViaEmail: 'Share via Email',
-    copyLink: 'Copy Link',
-    emailSubject: 'Check out this AI song',
-    emailBody: 'Hey!\n\nI created this AI-generated song and thought you\'d love it:\n\n"{title}" by {creator}\n{style}\n\nListen here: {url}\n\nMade with VsingerStudio - free and open source local AI music generation!',
     
     // Reference Modal
     referenceModalTitle: 'Reference',
@@ -639,7 +626,6 @@ export const translations = {
     save: '保存',
     delete: '删除',
     edit: '编辑',
-    share: '分享',
     download: '下载',
     play: '播放',
     pause: '暂停',
@@ -977,6 +963,7 @@ export const translations = {
     noSongsFound: '未找到匹配的歌曲',
     genres: '风格',
     songs: '首歌曲',
+    allSongs: '全部歌曲',
     
     // Library View
     yourLibrary: '我的音乐库',
@@ -1074,19 +1061,6 @@ export const translations = {
     songNotFound: '歌曲未找到',
     similar: '相似',
     by: '由',
-    
-    // ShareModal
-    shareSong: '分享歌曲',
-    shareOnX: '分享到 X',
-    shareOnFacebook: '分享到 Facebook',
-    shareOnWhatsApp: '分享到 WhatsApp',
-    shareOnTelegram: '分享到 Telegram',
-    shareOnReddit: '分享到 Reddit',
-    shareOnLinkedIn: '分享到 LinkedIn',
-    shareViaEmail: '通过邮件分享',
-    copyLink: '复制链接',
-    emailSubject: '来听听这首AI歌曲',
-    emailBody: '嘿！\n\n我创作了这首AI生成的歌曲，觉得你会喜欢：\n\n《{title}》- {creator}\n{style}\n\n点击收听：{url}\n\n使用 VsingerStudio 制作 - 免费开源的本地AI音乐生成工具！',
     
     // Reference Modal
     referenceModalTitle: '参考音频',
@@ -1227,7 +1201,6 @@ export const translations = {
     save: '保存',
     delete: '削除',
     edit: '編集',
-    share: '共有',
     download: 'ダウンロード',
     play: '再生',
     pause: '一時停止',
@@ -1565,6 +1538,7 @@ export const translations = {
     noSongsFound: '一致する曲が見つかりません',
     genres: 'ジャンル',
     songs: '曲',
+    allSongs: 'すべての曲',
     
     // Library View
     yourLibrary: 'マイライブラリ',
@@ -1662,19 +1636,6 @@ export const translations = {
     songNotFound: '曲が見つかりません',
     similar: '類似',
     by: '作成者',
-    
-    // ShareModal
-    shareSong: '曲を共有',
-    shareOnX: 'Xで共有',
-    shareOnFacebook: 'Facebookで共有',
-    shareOnWhatsApp: 'WhatsAppで共有',
-    shareOnTelegram: 'Telegramで共有',
-    shareOnReddit: 'Redditで共有',
-    shareOnLinkedIn: 'LinkedInで共有',
-    shareViaEmail: 'メールで共有',
-    copyLink: 'リンクをコピー',
-    emailSubject: 'このAI曲をチェックしてください',
-    emailBody: 'こんにちは！\n\n私がこのAI生成の曲を作りました。気に入ってもらえると思います：\n\n「{title}」by {creator}\n{style}\n\nここで聴いてください：{url}\n\nVsingerStudioで作成 - 無料でオープンソースのローカルAI音楽生成！',
     
     // Reference Modal
     referenceModalTitle: 'リファレンス',
@@ -1815,7 +1776,6 @@ export const translations = {
     save: '저장',
     delete: '삭제',
     edit: '편집',
-    share: '공유',
     download: '다운로드',
     play: '재생',
     pause: '일시정지',
@@ -2153,6 +2113,7 @@ export const translations = {
     noSongsFound: '일치하는 곡을 찾을 수 없습니다',
     genres: '장르',
     songs: '곡',
+    allSongs: '전체 곡',
     
     // Library View
     yourLibrary: '내 라이브러리',
@@ -2250,19 +2211,6 @@ export const translations = {
     songNotFound: '곡을 찾을 수 없습니다',
     similar: '유사',
     by: '제작자',
-    
-    // ShareModal
-    shareSong: '곡 공유',
-    shareOnX: 'X에서 공유',
-    shareOnFacebook: 'Facebook에서 공유',
-    shareOnWhatsApp: 'WhatsApp에서 공유',
-    shareOnTelegram: 'Telegram에서 공유',
-    shareOnReddit: 'Reddit에서 공유',
-    shareOnLinkedIn: 'LinkedIn에서 공유',
-    shareViaEmail: '이메일로 공유',
-    copyLink: '링크 복사',
-    emailSubject: '이 AI 곡을 들어보세요',
-    emailBody: '안녕하세요!\n\n제가 만든 이 AI 생성 곡을 들어보세요. 마음에 드실 거예요:\n\n"{title}" - {creator}\n{style}\n\n여기서 들으세요: {url}\n\nVsingerStudio로 제작 - 무료 오픈 소스 로컬 AI 음악 생성!',
     
     // Reference Modal
     referenceModalTitle: '참조 음악',

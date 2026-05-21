@@ -4,7 +4,6 @@ import { Playlist, Song } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { useI18n } from '../context/I18nContext';
 import { AlbumCover } from './AlbumCover';
-import { ShareModal } from './ShareModal';
 import { SongDropdownMenu } from './SongDropdownMenu';
 
 interface ReferenceTrack {
@@ -50,7 +49,6 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
   const [activeTab, setActiveTab] = useState<'all' | 'liked' | 'playlists'>('all');
   const [query, setQuery] = useState('');
   const [menuSong, setMenuSong] = useState<Song | null>(null);
-  const [shareSong, setShareSong] = useState<Song | null>(null);
 
   const filteredAllSongs = useMemo(() => {
     const lower = query.trim().toLowerCase();
@@ -192,7 +190,6 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                       onReusePrompt={() => onReusePrompt?.(song)}
                       onAddToPlaylist={() => onAddToPlaylist(song)}
                       onDelete={() => onDeleteSong?.(song)}
-                      onShare={() => setShareSong(song)}
                     />
                   </div>
                 </div>
@@ -202,13 +199,6 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
         </div>
       </div>
 
-      {shareSong && (
-        <ShareModal
-          isOpen={Boolean(shareSong)}
-          onClose={() => setShareSong(null)}
-          song={shareSong}
-        />
-      )}
     </>
   );
 };

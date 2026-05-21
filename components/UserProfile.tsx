@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Song, Playlist } from '../types';
 import { usersApi, getAudioUrl, UserProfile as UserProfileType, songsApi } from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { ArrowLeft, Play, Pause, Heart, Eye, Users, Music as MusicIcon, ChevronRight, Share2, MoreHorizontal, Edit3, X, Camera, Image as ImageIcon, Upload, Loader2 } from 'lucide-react';
+import { ArrowLeft, Play, Pause, Heart, Eye, Users, Music as MusicIcon, ChevronRight, MoreHorizontal, Edit3, X, Camera, Image as ImageIcon, Upload, Loader2 } from 'lucide-react';
 import { useI18n } from '../context/I18nContext';
 
 interface UserProfileProps {
@@ -480,7 +480,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({ username, onBack, onPl
                 {/* Songs Section */}
                 <section>
                     <div className="flex items-center justify-between mb-4 md:mb-6">
-                        <h2 className="text-xl md:text-2xl font-bold text-zinc-900 dark:text-white">{t('songs')}</h2>
+                        <h2 className="text-xl md:text-2xl font-bold text-zinc-900 dark:text-white">{t('allSongs')}</h2>
                         <div className="flex items-center gap-4">
                             <div className="flex bg-zinc-200 dark:bg-zinc-900 rounded-full p-1">
                                 <button

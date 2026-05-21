@@ -34,7 +34,7 @@ const inputClassName =
   'vs-accent-focus w-full rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-900 outline-none transition dark:border-white/10 dark:bg-white/5 dark:text-white';
 
 const singerTableGridClass =
-  'grid-cols-[88px_minmax(0,1.25fr)_minmax(0,1fr)_110px_100px_120px_150px]';
+  'grid-cols-[84px_minmax(150px,1fr)_minmax(180px,1.15fr)_112px_72px_96px_136px]';
 
 function readPendingBinding(): PendingVoiceBinding | null {
   try {
@@ -233,7 +233,7 @@ export const VirtualSingerManager: React.FC<VirtualSingerManagerProps> = ({
           </div>
         )}
 
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,1.25fr)_minmax(360px,420px)]">
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1.65fr)_minmax(340px,400px)]">
           <section className="min-w-0 rounded-3xl border border-zinc-200 bg-zinc-50/80 p-5 shadow-sm dark:border-white/10 dark:bg-white/[0.03]">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <h2 className="text-lg font-semibold text-zinc-900 dark:text-white">歌手列表</h2>
@@ -320,7 +320,7 @@ export const VirtualSingerManager: React.FC<VirtualSingerManagerProps> = ({
 
                 <div className="mt-4 hidden overflow-hidden rounded-2xl border border-zinc-200 dark:border-white/10 2xl:block">
                   <div
-                    className={`grid ${singerTableGridClass} gap-3 bg-zinc-100 px-4 py-3 text-xs font-semibold text-zinc-500 dark:bg-white/5 dark:text-zinc-400`}
+                    className={`grid ${singerTableGridClass} gap-4 bg-zinc-100 px-4 py-3 text-xs font-semibold text-zinc-500 dark:bg-white/5 dark:text-zinc-400`}
                   >
                     <span>头像</span>
                     <span>名称</span>
@@ -334,7 +334,7 @@ export const VirtualSingerManager: React.FC<VirtualSingerManagerProps> = ({
                   {singers.map((singer) => (
                     <div
                       key={singer.id}
-                      className={`grid ${singerTableGridClass} items-center gap-3 border-t border-zinc-200 bg-white px-4 py-4 dark:border-white/10 dark:bg-transparent`}
+                      className={`grid ${singerTableGridClass} items-center gap-4 border-t border-zinc-200 bg-white px-4 py-4 dark:border-white/10 dark:bg-transparent`}
                     >
                       <div className="flex items-center">
                         <div className="vs-gradient-icon flex h-12 w-12 items-center justify-center overflow-hidden rounded-2xl text-white">
