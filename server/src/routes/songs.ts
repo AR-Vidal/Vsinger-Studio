@@ -209,6 +209,44 @@ router.get('/public', optionalAuthMiddleware, async (req: AuthenticatedRequest, 
   }
 });
 
+// Get the user's complete library: owned, liked, and playlist-added songs.
+router.get('/library', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const result = await pool.query(
+      `SELECT DISTINCT s.id, s.title, s.lyrics, s.style, s.caption, s.cover_url, s.audio_url,
+              s.duration, s.bpm, s.key_scale, s.time_signature, s.tags, s.is_public,
+              s.like_count, s.view_count, s.user_id, s.created_at, s.generation_params,
+              COALESCE(u.username, 'Anonymous') as creator,
+              ${SINGER_SELECT_FIELDS}
+       FROM songs s
+       LEFT JOIN users u ON s.user_id = u.id
+       LEFT JOIN virtual_singers vs ON s.singer_id = vs.id
+       WHERE s.user_id = $1
+          OR EXISTS (
+            SELECT 1 FROM liked_songs ls
+            WHERE ls.song_id = s.id AND ls.user_id = $1
+          )
+          OR EXISTS (
+            SELECT 1
+            FROM playlist_songs ps
+            JOIN playlists p ON p.id = ps.playlist_id
+            WHERE ps.song_id = s.id AND p.user_id = $1
+          )
+       ORDER BY s.created_at DESC`,
+      [req.user!.id, req.user!.id, req.user!.id]
+    );
+
+    const songs = await Promise.all(
+      result.rows.map((row) => normalizeSongForResponse(row, Boolean(row.is_public)))
+    );
+
+    res.json({ songs });
+  } catch (error) {
+    console.error('Get library songs error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // Get single song
 router.get('/:id', optionalAuthMiddleware, async (req: AuthenticatedRequest, res: Response) => {
   try {

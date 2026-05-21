@@ -114,6 +114,6 @@ npm run build
 - `POST /api/training/export`
 - `POST /api/training/bind-voice`
 
-## 交付说明
+## 说明
 
 仓库不包含本地依赖、构建产物、生成音频、数据库文件、训练数据集或 ACE-Step 模型目录。运行时产生的数据位于 `server/data`、`server/public/audio` 和配置的数据集目录中。

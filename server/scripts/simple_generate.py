@@ -284,6 +284,7 @@ def main():
     parser.add_argument("--lm-top-p", type=float, default=0.9, help="LLM top-p sampling")
     parser.add_argument("--lm-negative-prompt", type=str, default="", help="LLM negative prompt")
     parser.add_argument("--sample-query", type=str, default="", help="Auto-generate caption and lyrics from a description")
+    parser.add_argument("--sample-query-file", type=str, default="", help="JSON file containing sample_query (avoids CLI encoding issues)")
     parser.add_argument("--lm-backend", type=str, default="pt", choices=["pt", "vllm", "mlx"], help="LM backend")
     parser.add_argument("--lm-model-path", type=str, default=None, help="LM model path or name")
     parser.add_argument("--no-cot-metas", action="store_true", help="Disable CoT for metadata")
@@ -300,6 +301,16 @@ def main():
     parser.add_argument("--json", action="store_true", help="Output as JSON")
 
     args = parser.parse_args()
+
+    # Resolve sample_query: prefer file (avoids Windows CLI encoding corruption)
+    resolved_sample_query = args.sample_query
+    if args.sample_query_file:
+        try:
+            with open(args.sample_query_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                resolved_sample_query = data.get("sample_query", resolved_sample_query)
+        except Exception as e:
+            print(f"Warning: failed to read sample-query-file: {e}", file=sys.stderr)
 
     try:
         result = generate(
@@ -338,7 +349,7 @@ def main():
             lm_top_k=args.lm_top_k,
             lm_top_p=args.lm_top_p,
             lm_negative_prompt=args.lm_negative_prompt,
-            sample_query=args.sample_query,
+            sample_query=resolved_sample_query,
             lm_backend=args.lm_backend,
             lm_model_path=args.lm_model_path,
             use_cot_metas=not args.no_cot_metas,

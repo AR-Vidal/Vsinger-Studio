@@ -302,8 +302,8 @@ function AppContent() {
 
     const loadSongs = async () => {
       try {
-        const [mySongsRes, likedSongsRes] = await Promise.all([
-          songsApi.getMySongs(token),
+        const [librarySongsRes, likedSongsRes] = await Promise.all([
+          songsApi.getLibrarySongs(token),
           songsApi.getLikedSongs(token)
         ]);
 
@@ -337,11 +337,11 @@ function AppContent() {
           })(),
         });
 
-        const mySongs = mySongsRes.songs.map(mapSong);
+        const librarySongs = librarySongsRes.songs.map(mapSong);
         const likedSongs = likedSongsRes.songs.map(mapSong);
 
         const songsMap = new Map<string, Song>();
-        [...mySongs, ...likedSongs].forEach(s => songsMap.set(s.id, s));
+        [...librarySongs, ...likedSongs].forEach(s => songsMap.set(s.id, s));
 
         // Preserve any generating songs (temp songs)
         setSongs(prev => {
@@ -684,7 +684,7 @@ function AppContent() {
   const refreshSongsList = useCallback(async () => {
     if (!token) return;
     try {
-      const response = await songsApi.getMySongs(token);
+      const response = await songsApi.getLibrarySongs(token);
       const loadedSongs: Song[] = response.songs.map(s => ({
         id: s.id,
         title: s.title,
@@ -1197,6 +1197,8 @@ function AppContent() {
     if (!songToAddToPlaylist || !token) return;
     try {
       await playlistsApi.addSong(playlistId, songToAddToPlaylist.id, token);
+      const songToMerge = songToAddToPlaylist;
+      setSongs(prev => prev.some(song => song.id === songToMerge.id) ? prev : [songToMerge, ...prev]);
       setSongToAddToPlaylist(null);
       showToast(t('songAddedToPlaylist'));
       playlistsApi.getMyPlaylists(token).then(r => setPlaylists(r.playlists)).catch(() => {});
@@ -1275,10 +1277,9 @@ function AppContent() {
   const renderContent = () => {
     switch (currentView) {
       case 'library': {
-        const allSongs = user ? songs.filter(s => s.userId === user.id) : [];
         return (
           <LibraryView
-            allSongs={allSongs}
+            allSongs={user ? songs : []}
             likedSongs={songs.filter(s => likedSongIds.has(s.id))}
             playlists={playlists}
             referenceTracks={referenceTracks}

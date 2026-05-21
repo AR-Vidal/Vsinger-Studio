@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Song } from '../types';
-import { Play, MoreHorizontal, Heart, ThumbsDown, ListPlus, Pause, Search, Filter, Check, Globe, Lock, Loader2, ThumbsUp, Share2, Video, Info, Clock } from 'lucide-react';
+import { Play, MoreHorizontal, Heart, ListPlus, Pause, Search, Filter, Check, Lock, Loader2, ThumbsUp, Share2, Video, Info, Clock } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useI18n } from '../context/I18nContext';
 import { SongDropdownMenu } from './SongDropdownMenu';
@@ -37,7 +37,7 @@ interface SongListProps {
 
 
 // Define Filter Types
-type FilterType = 'liked' | 'public' | 'private' | 'generating';
+type FilterType = 'liked' | 'generating';
 
 // Map model ID to short display name
 const getModelDisplayName = (modelId?: string): string => {
@@ -124,8 +124,6 @@ export const SongList: React.FC<SongListProps> = ({
 
     const FILTERS: { id: FilterType; label: string; icon: React.ReactNode }[] = [
         { id: 'liked', label: t('liked'), icon: <ThumbsUp size={16} /> },
-        { id: 'public', label: t('public'), icon: <Globe size={16} /> },
-        { id: 'private', label: t('private'), icon: <Lock size={16} /> },
         { id: 'generating', label: t('generatingStatus'), icon: <Loader2 size={16} /> }
     ];
 
@@ -179,8 +177,6 @@ export const SongList: React.FC<SongListProps> = ({
             if (activeFilters.size === 0) return true;
 
             if (activeFilters.has('liked') && !likedSongIds.has(song.id)) return false;
-            if (activeFilters.has('public') && !song.isPublic) return false;
-            if (activeFilters.has('private') && song.isPublic) return false;
             if (activeFilters.has('generating') && !song.isGenerating) return false;
 
             return true;
@@ -302,14 +298,14 @@ export const SongList: React.FC<SongListProps> = ({
                                     : 'bg-zinc-100 dark:bg-[#121214] hover:bg-zinc-200 dark:hover:bg-white/5 border-zinc-200 dark:border-white/10 text-zinc-700 dark:text-white'
                                 }`}
                         >
-                            Select
+                            选择
                         </button>
                     </div>
 
                     {isSelecting && (
                         <div className="flex items-center justify-between gap-3 rounded-xl border border-zinc-200 dark:border-white/10 bg-zinc-50 dark:bg-white/5 px-4 py-3">
                             <div className="text-sm text-zinc-600 dark:text-zinc-300">
-                                {selectedSongs.length} selected
+                                已选择 {selectedSongs.length} 首
                             </div>
                             <div className="flex items-center gap-2">
                                 <button
@@ -322,7 +318,7 @@ export const SongList: React.FC<SongListProps> = ({
                                     }}
                                     className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-zinc-200 dark:border-white/10 text-zinc-600 dark:text-zinc-300 hover:border-zinc-300 dark:hover:border-white/20"
                                 >
-                                    {allSelected ? 'Clear all' : 'Select all'}
+                                    {allSelected ? '取消全选' : '全选'}
                                 </button>
                                 <button
                                     onClick={() => {
@@ -337,7 +333,7 @@ export const SongList: React.FC<SongListProps> = ({
                                         }`}
                                     disabled={!selectedSongs.length}
                                 >
-                                    Delete
+                                    删除
                                 </button>
                             </div>
                         </div>
@@ -684,20 +680,10 @@ const SongItem: React.FC<SongItemProps> = ({
                 {!song.isGenerating && (
                     <div className="flex items-center gap-1 pt-2">
                         <button
-                            className={`flex items-center gap-1 px-3 py-1.5 rounded-full hover:bg-white/5 transition-colors ${isLiked ? 'vs-accent-text bg-pink-100 dark:bg-pink-500/10' : 'text-zinc-400 hover:text-black dark:hover:text-white'}`}
+                            className={`p-2 rounded-full hover:bg-zinc-200 dark:hover:bg-white/5 transition-colors ${isLiked ? 'vs-accent-text bg-pink-100 dark:bg-pink-500/10' : 'text-zinc-400 hover:text-black dark:hover:text-white'}`}
                             onClick={(e) => { e.stopPropagation(); onToggleLike(); }}
                         >
                             <ThumbsUp size={16} fill={isLiked ? "currentColor" : "none"} />
-                            {(song.likeCount || 0) > 0 && (
-                                <span className="text-xs font-bold">{song.likeCount}</span>
-                            )}
-                        </button>
-
-                        <button
-                            className="p-2 rounded-full hover:bg-zinc-200 dark:hover:bg-white/5 text-zinc-400 hover:text-black dark:hover:text-white transition-colors"
-                            onClick={(e) => { e.stopPropagation(); }}
-                        >
-                            <ThumbsDown size={16} />
                         </button>
 
                         <button

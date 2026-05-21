@@ -2,6 +2,33 @@ import type { SingerGenderValue } from '../constants/genders';
 
 // Use relative URLs so Vite proxy handles them (enables LAN access)
 const API_BASE = '';
+const TRAINING_AUDIO_EXTENSIONS = ['.wav', '.mp3', '.flac', '.ogg', '.opus'];
+const TRAINING_AUDIO_MAX_FILES = 200;
+const TRAINING_AUDIO_MAX_FILE_SIZE = 100 * 1024 * 1024;
+
+function formatMb(bytes: number): string {
+  return `${(bytes / 1024 / 1024).toFixed(1)}MB`;
+}
+
+function validateTrainingAudioFiles(files: File[]): void {
+  if (files.length > TRAINING_AUDIO_MAX_FILES) {
+    throw new Error(`Audio upload failed: select at most ${TRAINING_AUDIO_MAX_FILES} files at once. Selected ${files.length}.`);
+  }
+
+  const invalidType = files.find((file) => {
+    const dot = file.name.lastIndexOf('.');
+    const ext = dot >= 0 ? file.name.slice(dot).toLowerCase() : '';
+    return !TRAINING_AUDIO_EXTENSIONS.includes(ext);
+  });
+  if (invalidType) {
+    throw new Error(`Audio upload failed: unsupported file type for "${invalidType.name}". Allowed: ${TRAINING_AUDIO_EXTENSIONS.join(', ')}.`);
+  }
+
+  const oversized = files.find((file) => file.size > TRAINING_AUDIO_MAX_FILE_SIZE);
+  if (oversized) {
+    throw new Error(`Audio upload failed: "${oversized.name}" is ${formatMb(oversized.size)}. Each file must be 100MB or smaller.`);
+  }
+}
 
 // Resolve audio URL based on storage type
 export function getAudioUrl(audioUrl: string | undefined | null, songId?: string): string | undefined {
@@ -158,6 +185,11 @@ function transformSongs(songs: Song[]): Song[] {
 export const songsApi = {
   getMySongs: async (token: string): Promise<{ songs: Song[] }> => {
     const result = await api('/api/songs', { token }) as { songs: Song[] };
+    return { songs: transformSongs(result.songs) };
+  },
+
+  getLibrarySongs: async (token: string): Promise<{ songs: Song[] }> => {
+    const result = await api('/api/songs/library', { token }) as { songs: Song[] };
     return { songs: transformSongs(result.songs) };
   },
 
@@ -672,16 +704,24 @@ export const trainingApi = {
     uploadDir: string;
     count: number;
   }> => {
+    validateTrainingAudioFiles(files);
+
     const formData = new FormData();
     formData.append('datasetName', datasetName);
     for (const file of files) {
       formData.append('audio', file);
     }
-    const response = await fetch(`${API_BASE}/api/training/upload-audio`, {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${token}` },
-      body: formData,
-    });
+    let response: Response;
+    try {
+      response = await fetch(`${API_BASE}/api/training/upload-audio`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formData,
+      });
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : 'network request failed';
+      throw new Error(`Audio upload could not reach the server (${detail}). Reopen the current VsingerStudio local URL and retry.`);
+    }
     if (!response.ok) {
       const error = await response.json().catch(() => ({ error: 'Upload failed' }));
       throw new Error(error.error || 'Upload failed');
@@ -821,10 +861,22 @@ export const trainingApi = {
     api('/api/training/load-tensors', { method: 'POST', body: { tensorDir }, token }),
 
   startTraining: (params: TrainingParams, token: string): Promise<{
+    status?: string;
+    progress: string;
+    log?: string;
+    metrics?: unknown;
+    running?: boolean;
+  }> => api('/api/training/start', { method: 'POST', body: params, token }),
+
+  getTrainingStatus: (token: string): Promise<{
+    running: boolean;
+    startedAt: string | null;
+    updatedAt: string | null;
     progress: string;
     log: string;
     metrics: unknown;
-  }> => api('/api/training/start', { method: 'POST', body: params, token }),
+    error: string | null;
+  }> => api('/api/training/status', { token }),
 
   stopTraining: (token: string): Promise<{ status: string }> =>
     api('/api/training/stop', { method: 'POST', token }),

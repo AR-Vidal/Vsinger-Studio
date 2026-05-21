@@ -33,6 +33,9 @@ const EMPTY_FORM = {
 const inputClassName =
   'vs-accent-focus w-full rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-900 outline-none transition dark:border-white/10 dark:bg-white/5 dark:text-white';
 
+const singerTableGridClass =
+  'grid-cols-[88px_minmax(0,1.25fr)_minmax(0,1fr)_110px_100px_120px_150px]';
+
 function readPendingBinding(): PendingVoiceBinding | null {
   try {
     const raw = sessionStorage.getItem('pendingVoiceBinding');
@@ -210,8 +213,8 @@ export const VirtualSingerManager: React.FC<VirtualSingerManagerProps> = ({
   };
 
   return (
-    <div className="h-full overflow-y-auto bg-white px-4 py-5 dark:bg-suno-DEFAULT sm:px-6 lg:px-8">
-      <div className="w-full max-w-screen-2xl space-y-6">
+    <div className="scrollbar-hide h-full overflow-y-auto bg-white px-4 py-5 dark:bg-suno-DEFAULT sm:px-6 lg:px-8">
+      <div className="w-full max-w-none space-y-6">
         <div className="flex flex-col gap-2">
           <h1 className="text-3xl font-bold text-zinc-900 dark:text-white">虚拟歌手管理</h1>
           <p className="text-sm text-zinc-500 dark:text-zinc-400">
@@ -278,10 +281,6 @@ export const VirtualSingerManager: React.FC<VirtualSingerManagerProps> = ({
                         </div>
                       </div>
 
-                      <p className="mt-3 line-clamp-3 text-sm text-zinc-600 dark:text-zinc-300">
-                        {singer.personaPrompt || singer.notes || '暂无角色设定。'}
-                      </p>
-
                       <div className="mt-3 flex flex-wrap gap-1.5">
                         {singer.styleTags.length > 0 ? (
                           singer.styleTags.map((tag) => (
@@ -320,9 +319,11 @@ export const VirtualSingerManager: React.FC<VirtualSingerManagerProps> = ({
                 </div>
 
                 <div className="mt-4 hidden overflow-hidden rounded-2xl border border-zinc-200 dark:border-white/10 2xl:block">
-                  <div className="grid grid-cols-[88px_minmax(220px,1.25fr)_minmax(180px,1fr)_110px_100px_120px_150px] gap-3 bg-zinc-100 px-4 py-3 text-xs font-semibold text-zinc-500 dark:bg-white/5 dark:text-zinc-400">
+                  <div
+                    className={`grid ${singerTableGridClass} gap-3 bg-zinc-100 px-4 py-3 text-xs font-semibold text-zinc-500 dark:bg-white/5 dark:text-zinc-400`}
+                  >
                     <span>头像</span>
-                    <span>名称 / 角色设定</span>
+                    <span>名称</span>
                     <span>风格标签</span>
                     <span>语言</span>
                     <span>性别</span>
@@ -333,7 +334,7 @@ export const VirtualSingerManager: React.FC<VirtualSingerManagerProps> = ({
                   {singers.map((singer) => (
                     <div
                       key={singer.id}
-                      className="grid grid-cols-[88px_minmax(220px,1.25fr)_minmax(180px,1fr)_110px_100px_120px_150px] gap-3 border-t border-zinc-200 bg-white px-4 py-4 dark:border-white/10 dark:bg-transparent"
+                      className={`grid ${singerTableGridClass} items-center gap-3 border-t border-zinc-200 bg-white px-4 py-4 dark:border-white/10 dark:bg-transparent`}
                     >
                       <div className="flex items-center">
                         <div className="vs-gradient-icon flex h-12 w-12 items-center justify-center overflow-hidden rounded-2xl text-white">
@@ -347,17 +348,14 @@ export const VirtualSingerManager: React.FC<VirtualSingerManagerProps> = ({
 
                       <div className="min-w-0">
                         <div className="truncate font-semibold text-zinc-900 dark:text-white">{singer.name}</div>
-                        <div className="mt-1 line-clamp-2 text-xs text-zinc-500 dark:text-zinc-400">
-                          {singer.personaPrompt || singer.notes || '暂无角色设定。'}
-                        </div>
                       </div>
 
-                      <div className="flex flex-wrap content-start gap-1">
+                      <div className="min-w-0 flex flex-wrap content-center items-center gap-1">
                         {singer.styleTags.length > 0 ? (
                           singer.styleTags.map((tag) => (
                             <span
                               key={`${singer.id}-${tag}`}
-                              className="rounded-full bg-zinc-100 px-2 py-1 text-xs text-zinc-700 dark:bg-white/10 dark:text-zinc-200"
+                              className="max-w-full whitespace-normal break-words rounded-full bg-zinc-100 px-2 py-1 text-xs leading-snug text-zinc-700 [overflow-wrap:anywhere] dark:bg-white/10 dark:text-zinc-200"
                             >
                               {tag}
                             </span>
@@ -375,7 +373,7 @@ export const VirtualSingerManager: React.FC<VirtualSingerManagerProps> = ({
                         {getSingerGenderLabel(singer.gender)}
                       </div>
 
-                      <div className="flex items-start">
+                      <div className="flex items-center">
                         <span
                           className={`rounded-full px-2 py-1 text-xs font-semibold ${
                             singer.hasVoiceBinding
@@ -387,22 +385,22 @@ export const VirtualSingerManager: React.FC<VirtualSingerManagerProps> = ({
                         </span>
                       </div>
 
-                      <div className="flex items-start gap-2">
+                      <div className="flex min-w-0 flex-wrap items-center gap-2">
                         <button
                           type="button"
                           onClick={() => handleEdit(singer)}
-                          className="inline-flex items-center gap-1 rounded-xl border border-zinc-200 px-2.5 py-1.5 text-xs text-zinc-700 transition hover:bg-zinc-100 dark:border-white/10 dark:text-zinc-200 dark:hover:bg-white/10"
+                          className="inline-flex min-w-0 items-center gap-1 whitespace-normal break-words rounded-xl border border-zinc-200 px-2.5 py-1.5 text-xs leading-snug text-zinc-700 transition [overflow-wrap:anywhere] hover:bg-zinc-100 dark:border-white/10 dark:text-zinc-200 dark:hover:bg-white/10"
                         >
-                          <Pencil size={14} />
-                          编辑
+                          <Pencil size={14} className="shrink-0" />
+                          <span className="min-w-0">编辑</span>
                         </button>
                         <button
                           type="button"
                           onClick={() => handleDelete(singer)}
-                          className="inline-flex items-center gap-1 rounded-xl border border-rose-200 px-2.5 py-1.5 text-xs text-rose-600 transition hover:bg-rose-50 dark:border-rose-400/20 dark:text-rose-300 dark:hover:bg-rose-500/10"
+                          className="inline-flex min-w-0 items-center gap-1 whitespace-normal break-words rounded-xl border border-rose-200 px-2.5 py-1.5 text-xs leading-snug text-rose-600 transition [overflow-wrap:anywhere] hover:bg-rose-50 dark:border-rose-400/20 dark:text-rose-300 dark:hover:bg-rose-500/10"
                         >
-                          <Trash2 size={14} />
-                          删除
+                          <Trash2 size={14} className="shrink-0" />
+                          <span className="min-w-0">删除</span>
                         </button>
                       </div>
                     </div>

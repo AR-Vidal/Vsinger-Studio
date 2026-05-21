@@ -23,28 +23,48 @@ import { clearSingerVoice, ensureSingerVoice } from '../services/lora-manager.js
 
 const router = Router();
 
-// Auto-generate a song title from lyrics or style when none is provided
-function autoTitle(params: { title?: string; lyrics?: string; instrumental?: boolean; style?: string; songDescription?: string }): string {
-  if (params.title?.trim()) return params.title.trim();
+// Auto-generate a song title from final lyrics, user description, or generated caption.
+function autoTitle(params: { title?: string; lyrics?: string; instrumental?: boolean; style?: string; songDescription?: string; vocalLanguage?: string; generatedCaption?: string }): string {
+  const providedTitle = params.title?.trim();
+  if (providedTitle && !/^generating\.{0,3}$/i.test(providedTitle) && !/^untitled$/i.test(providedTitle)) {
+    return providedTitle;
+  }
 
-  // Try first meaningful lyric line (skip section markers like [verse], [chorus])
+  const wantHanzi = params.vocalLanguage === 'zh' || params.vocalLanguage === 'yue';
+  const containsHanzi = (s: string) => /[\u4e00-\u9fff]/.test(s);
+  const looksLikeRomanized = (s: string) => /[a-zA-Z]/.test(s) && !containsHanzi(s);
+  const cleanCandidate = (value: string) => value
+    .replace(/\[[^\]]*\]/g, '')
+    .replace(/[《》"'“”‘’]/g, '')
+    .trim();
+
   if (!params.instrumental && params.lyrics) {
     for (const line of params.lyrics.split('\n')) {
-      const t = line.trim();
-      if (t && !/^\[.*\]$/.test(t)) {
-        return t.length > 40 ? t.slice(0, 40).trimEnd() + '…' : t;
+      const candidate = cleanCandidate(line);
+      if (!candidate) continue;
+      if (wantHanzi && looksLikeRomanized(candidate)) continue;
+      if (containsHanzi(candidate)) {
+        return candidate.length > 16 ? `${candidate.slice(0, 16)}…` : candidate;
       }
+      return candidate.length > 40 ? `${candidate.slice(0, 40).trimEnd()}…` : candidate;
     }
   }
 
-  // Fall back to first 4 words of style or description
-  const source = params.style || params.songDescription || '';
-  if (source) {
-    const words = source.trim().split(/\s+/).slice(0, 4).join(' ');
-    return words.charAt(0).toUpperCase() + words.slice(1);
+  const candidates = [params.songDescription, params.generatedCaption, params.style].filter((s): s is string => Boolean(s?.trim()));
+  const preferred = wantHanzi
+    ? (candidates.find(containsHanzi) ?? candidates.find((candidate) => !looksLikeRomanized(candidate)) ?? candidates[0])
+    : candidates[0];
+
+  if (preferred) {
+    const trimmed = cleanCandidate(preferred);
+    if (containsHanzi(trimmed)) {
+      return trimmed.length > 16 ? `${trimmed.slice(0, 16)}…` : trimmed;
+    }
+    const words = trimmed.split(/\s+/).slice(0, 4).join(' ');
+    if (words) return words.charAt(0).toUpperCase() + words.slice(1);
   }
 
-  return 'Untitled';
+  return wantHanzi ? '未命名歌曲' : 'New Song';
 }
 
 function hasText(value: unknown): value is string {
@@ -537,12 +557,14 @@ router.get('/status/:jobId', authMiddleware, async (req: AuthenticatedRequest, r
                 : (aceStatus.result.lyrics || params.lyrics || '');
               const generatedCaption = aceStatus.result.caption || params.style || params.songDescription || '';
               const songStyle = params.style || generatedCaption || params.songDescription || '';
+              const baseSongTitle = autoTitle({ ...params, lyrics: generatedLyrics, style: songStyle, generatedCaption });
+              const songTitle = baseSongTitle + variationSuffix;
               const storedParams = {
                 ...params,
+                title: songTitle,
                 lyrics: generatedLyrics,
                 generatedCaption,
               };
-              const songTitle = autoTitle({ ...storedParams, style: songStyle }) + variationSuffix;
 
               const songId = generateUUID();
 

@@ -1,4 +1,4 @@
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { authMiddleware, AuthenticatedRequest } from '../middleware/auth.js';
 import { getGradioClient } from '../services/gradio-client.js';
 import { config } from '../config/index.js';
@@ -18,6 +18,28 @@ const __dirname = path.dirname(__filename);
 
 const router = Router();
 const ACESTEP_API_TIMEOUT_MS = 30000;
+
+type TrainingRunStatus = {
+  running: boolean;
+  startedAt: string | null;
+  updatedAt: string | null;
+  progress: string;
+  log: string;
+  metrics: unknown;
+  error: string | null;
+};
+
+let trainingRunStatus: TrainingRunStatus = {
+  running: false,
+  startedAt: null,
+  updatedAt: null,
+  progress: 'Idle',
+  log: '',
+  metrics: null,
+  error: null,
+};
+
+let activeTrainingSubmission: { cancel?: () => Promise<void> } | null = null;
 
 function resolveAceStepRelativePath(targetPath: string, aceStepDir: string): string {
   return path.isAbsolute(targetPath)
@@ -167,6 +189,8 @@ function isAutoLabelFailureStatus(status: string) {
 
 // --- Audio upload via multer disk storage ---
 const AUDIO_EXTENSIONS = ['.wav', '.mp3', '.flac', '.ogg', '.opus'];
+const AUDIO_UPLOAD_MAX_FILES = 200;
+const AUDIO_UPLOAD_MAX_FILE_SIZE = 100 * 1024 * 1024;
 
 const audioStorage = multer.diskStorage({
   destination: async (_req: Request, _file, cb) => {
@@ -190,7 +214,7 @@ const audioStorage = multer.diskStorage({
 
 const audioUpload = multer({
   storage: audioStorage,
-  limits: { fileSize: 100 * 1024 * 1024 }, // 100MB per file
+  limits: { fileSize: AUDIO_UPLOAD_MAX_FILE_SIZE }, // 100MB per file
   fileFilter: (_req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
     if (AUDIO_EXTENSIONS.includes(ext)) {
@@ -200,6 +224,32 @@ const audioUpload = multer({
     }
   },
 });
+
+function handleAudioUpload(req: AuthenticatedRequest, res: Response, next: NextFunction): void {
+  audioUpload.array('audio', AUDIO_UPLOAD_MAX_FILES)(req, res, (err: unknown) => {
+    if (!err) {
+      next();
+      return;
+    }
+
+    if (err instanceof multer.MulterError) {
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        res.status(413).json({ error: 'Audio upload failed: each file must be 100MB or smaller.' });
+        return;
+      }
+      if (err.code === 'LIMIT_UNEXPECTED_FILE') {
+        res.status(400).json({ error: `Audio upload failed: upload at most ${AUDIO_UPLOAD_MAX_FILES} audio files at once.` });
+        return;
+      }
+      res.status(400).json({ error: `Audio upload failed: ${err.message}` });
+      return;
+    }
+
+    res.status(400).json({
+      error: err instanceof Error ? err.message : 'Audio upload failed',
+    });
+  });
+}
 
 // Get audio duration via ffprobe
 function getAudioDuration(filePath: string): number {
@@ -250,6 +300,38 @@ function resolveWithinAceStep(rawPath: string | undefined, aceStepDir: string): 
     : path.resolve(aceStepDir, rawPath);
 }
 
+function resolveTensorDirForTraining(rawPath: unknown, aceStepDir: string): string {
+  const requested = typeof rawPath === 'string' && rawPath.trim()
+    ? rawPath.trim()
+    : './datasets/preprocessed_tensors';
+  return path.isAbsolute(requested)
+    ? path.resolve(requested)
+    : path.resolve(aceStepDir, requested);
+}
+
+function countPtFiles(tensorDir: string): number {
+  if (!existsSync(tensorDir) || !statSync(tensorDir).isDirectory()) {
+    return 0;
+  }
+
+  return readdirSync(tensorDir).filter((file) => file.toLowerCase().endsWith('.pt')).length;
+}
+
+function assertValidTensorDir(tensorDir: string, aceStepDir: string): void {
+  if (!isInsideBase(aceStepDir, tensorDir)) {
+    throw new Error(`Tensor directory must be inside ACE-Step: ${tensorDir}`);
+  }
+
+  if (!existsSync(tensorDir) || !statSync(tensorDir).isDirectory()) {
+    throw new Error(`Tensor directory not found: ${tensorDir}`);
+  }
+
+  const ptCount = countPtFiles(tensorDir);
+  if (ptCount === 0) {
+    throw new Error(`No .pt tensor files found in ${tensorDir}`);
+  }
+}
+
 function isInsideBase(baseDir: string, targetPath: string): boolean {
   const relative = path.relative(baseDir, targetPath);
   return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
@@ -293,7 +375,7 @@ async function cleanupReplacedBindingPaths(
 // ================== NEW ROUTES ==================
 
 // POST /api/training/upload-audio — Upload audio files for a dataset
-router.post('/upload-audio', authMiddleware, audioUpload.array('audio', 50), async (req: AuthenticatedRequest, res: Response) => {
+router.post('/upload-audio', authMiddleware, handleAudioUpload, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const files = req.files as Express.Multer.File[];
     if (!files || files.length === 0) {
@@ -554,6 +636,9 @@ router.post('/preprocess', authMiddleware, async (req: AuthenticatedRequest, res
       env: {
         ...process.env,
         ACESTEP_PATH: aceStepDir,
+        ACESTEP_OFFLOAD_TO_CPU: process.env.ACESTEP_OFFLOAD_TO_CPU ?? 'true',
+        ACESTEP_OFFLOAD_DIT_TO_CPU: process.env.ACESTEP_OFFLOAD_DIT_TO_CPU ?? 'true',
+        ACESTEP_USE_FLASH_ATTENTION: process.env.ACESTEP_USE_FLASH_ATTENTION ?? 'false',
       },
     });
 
@@ -616,8 +701,8 @@ router.post('/preprocess', authMiddleware, async (req: AuthenticatedRequest, res
         res.status(500).json({
           error: message,
           code,
-          stderr: stderr.trim(),
-          stdout: stdout.trim(),
+          stderr: stderr.trim().slice(-4000),
+          stdout: stdout.trim().slice(-4000),
         });
       }
     });
@@ -1060,15 +1145,20 @@ router.post('/save-dataset', authMiddleware, async (req: AuthenticatedRequest, r
 router.post('/load-tensors', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { tensorDir } = req.body;
+    const aceStepDir = getAceStepDir();
+    const resolvedTensorDir = resolveTensorDirForTraining(tensorDir, aceStepDir);
+    assertValidTensorDir(resolvedTensorDir, aceStepDir);
 
     const client = await getGradioClient();
     const result = await client.predict('/load_training_dataset', [
-      tensorDir ?? './datasets/preprocessed_tensors',
+      resolvedTensorDir,
     ]);
     const data = result.data as unknown[];
 
     res.json({
       status: data[0],
+      tensorDir: resolvedTensorDir,
+      tensorFiles: countPtFiles(resolvedTensorDir),
     });
   } catch (error) {
     console.error('[Training] Load tensors error:', error);
@@ -1079,15 +1169,39 @@ router.post('/load-tensors', authMiddleware, async (req: AuthenticatedRequest, r
 // POST /api/training/start — Start LoRA training
 router.post('/start', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
   try {
+    if (trainingRunStatus.running) {
+      res.status(409).json({
+        error: 'Training is already running',
+        status: trainingRunStatus.progress,
+        log: trainingRunStatus.log,
+      });
+      return;
+    }
+
     const {
       tensorDir, rank, alpha, dropout, learningRate,
       epochs, batchSize, gradientAccumulation, saveEvery,
       shift, seed, outputDir, resumeCheckpoint,
     } = req.body;
 
+    const aceStepDir = getAceStepDir();
+    const resolvedTensorDir = resolveTensorDirForTraining(tensorDir, aceStepDir);
+    assertValidTensorDir(resolvedTensorDir, aceStepDir);
+
     const client = await getGradioClient();
-    const result = await client.predict('/training_wrapper', [
-      tensorDir ?? './datasets/preprocessed_tensors',
+    const startedAt = new Date().toISOString();
+    trainingRunStatus = {
+      running: true,
+      startedAt,
+      updatedAt: startedAt,
+      progress: `Training started from ${resolvedTensorDir}`,
+      log: `Tensor files: ${countPtFiles(resolvedTensorDir)}`,
+      metrics: null,
+      error: null,
+    };
+
+    const submission = client.submit('/training_wrapper', [
+      resolvedTensorDir,
       rank ?? 64,
       alpha ?? 128,
       dropout ?? 0.1,
@@ -1101,28 +1215,72 @@ router.post('/start', authMiddleware, async (req: AuthenticatedRequest, res: Res
       outputDir ?? './lora_output',
       resumeCheckpoint ?? null,
     ]);
-    const data = result.data as unknown[];
+    activeTrainingSubmission = submission;
 
-    // Returns: [trainingProgress, trainingLog, lineplotData]
+    void (async () => {
+      try {
+        for await (const message of submission) {
+          trainingRunStatus.updatedAt = new Date().toISOString();
+
+          if (message.type === 'data') {
+            const data = Array.isArray(message.data) ? message.data as unknown[] : [];
+            trainingRunStatus.progress = typeof data[0] === 'string' ? data[0] : trainingRunStatus.progress;
+            trainingRunStatus.log = typeof data[1] === 'string' ? data[1] : trainingRunStatus.log;
+            trainingRunStatus.metrics = data[2] ?? trainingRunStatus.metrics;
+          } else if (message.type === 'status') {
+            if (typeof message.message === 'string' && message.message.trim()) {
+              trainingRunStatus.progress = message.message;
+            }
+            if (message.stage === 'error') {
+              trainingRunStatus.error = typeof message.message === 'string'
+                ? message.message
+                : 'Training failed.';
+            }
+          }
+        }
+      } catch (error) {
+        trainingRunStatus.error = error instanceof Error ? error.message : 'Training failed.';
+      } finally {
+        trainingRunStatus.running = false;
+        trainingRunStatus.updatedAt = new Date().toISOString();
+        activeTrainingSubmission = null;
+      }
+    })();
+
     res.json({
-      progress: data[0],
-      log: data[1],
-      metrics: data[2],
+      status: 'Training started',
+      progress: trainingRunStatus.progress,
+      running: true,
     });
   } catch (error) {
+    trainingRunStatus.running = false;
+    trainingRunStatus.error = error instanceof Error ? error.message : 'Failed to start training';
     console.error('[Training] Start training error:', error);
     res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to start training' });
   }
 });
 
+router.get('/status', authMiddleware, async (_req: AuthenticatedRequest, res: Response) => {
+  res.json(trainingRunStatus);
+});
+
 // POST /api/training/stop — Stop current training
 router.post('/stop', authMiddleware, async (_req: AuthenticatedRequest, res: Response) => {
   try {
+    if (activeTrainingSubmission?.cancel) {
+      await activeTrainingSubmission.cancel();
+      activeTrainingSubmission = null;
+    }
+
     const client = await getGradioClient();
     const result = await client.predict('/stop_training', []);
     const data = result.data as unknown[];
 
-    res.json({ status: data[0] });
+    trainingRunStatus.running = false;
+    trainingRunStatus.updatedAt = new Date().toISOString();
+    trainingRunStatus.progress = typeof data[0] === 'string' ? data[0] : 'Training stop requested.';
+
+    res.json({ status: trainingRunStatus.progress });
   } catch (error) {
     console.error('[Training] Stop training error:', error);
     res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to stop training' });

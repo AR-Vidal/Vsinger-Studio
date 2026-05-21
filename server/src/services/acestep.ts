@@ -525,30 +525,46 @@ function buildPromptText(params: GenerationParams): string {
 
 function buildAutoLyricsSampleQuery(params: GenerationParams): string {
   const base = buildPromptText(params).trim();
-  const languageHint = (() => {
-    switch (params.vocalLanguage) {
-      case 'zh':
-        return '必须使用简体中文汉字写歌词，禁止拼音，禁止英文，禁止日文';
-      case 'en':
-        return 'English lyrics only';
-      case 'ja':
-        return 'Japanese lyrics only';
-      case 'ko':
-        return 'Korean lyrics only';
-      case 'yue':
-        return '必须使用粤语中文歌词';
-      default:
-        return '有歌词';
+  const language = params.vocalLanguage || 'zh';
+
+  // Front-load the language directive so the LLM commits to the script
+  // before parsing the (often code-mixed) caption text. The metadata FSM
+  // only locks the `language` field — lyric body is free-form, so the
+  // strongest lever we have is repeated, leading-position instructions.
+  //
+  // CAUTION: parse_description_hints in ACE-Step does a substring match for
+  // "instrumental"/"pure music" and force-flips the request to instrumental.
+  // Never use those words here, even when negating them.
+  if (language === 'zh') {
+    return [
+      'Write Mandarin Chinese (Simplified) vocal song lyrics using Hanzi characters only.',
+      '必须使用简体中文汉字写歌词。',
+      '严禁使用拼音、罗马字、英文字母。',
+      'Do NOT output pinyin or romanization. Lyrics must be Hanzi.',
+      `主题: ${base}`,
+      '人声演唱，需要歌词。',
+    ].filter(Boolean).join('\n');
+  }
+
+  if (language === 'yue') {
+    return [
+      'Write Cantonese (粤语) vocal song lyrics using Traditional or Simplified Chinese characters only.',
+      '必须使用中文汉字写粤语歌词，严禁拼音和罗马字。',
+      `主题: ${base}`,
+      '人声演唱，需要歌词。',
+    ].filter(Boolean).join('\n');
+  }
+
+  const scriptHint = (() => {
+    switch (language) {
+      case 'en': return 'English vocal lyrics.';
+      case 'ja': return 'Japanese vocal lyrics using Kanji/Kana only — no romaji.';
+      case 'ko': return 'Korean vocal lyrics using Hangul only — no romanization.';
+      default: return `Vocal lyrics in language code "${language}" — use the native script.`;
     }
   })();
 
-  return [
-    base,
-    languageHint,
-    '人声演唱',
-    '非纯音乐',
-    '不要器乐曲',
-  ].filter(Boolean).join('，');
+  return [scriptHint, `Theme: ${base}`, 'Sung vocal performance with lyrics.'].join('\n');
 }
 
 function shouldUseAutoLyricsMode(params: GenerationParams): boolean {
@@ -562,6 +578,33 @@ function shouldUseAutoLyricsMode(params: GenerationParams): boolean {
     !params.audioCodes &&
     Boolean(buildPromptText(params))
   );
+}
+
+function wantsChineseLyrics(params: GenerationParams): boolean {
+  return params.vocalLanguage === 'zh' || params.vocalLanguage === 'yue';
+}
+
+function containsHanzi(value: string): boolean {
+  return /[\u4e00-\u9fff]/.test(value);
+}
+
+function looksLikeRomanizedLyrics(value: string): boolean {
+  const stripped = value.replace(/\[[^\]]*\]/g, '').trim();
+  return /[a-zA-Z]/.test(stripped) && !containsHanzi(stripped);
+}
+
+function validateChineseLyrics(lyrics: string, context: string): void {
+  if (!lyrics.trim()) {
+    throw new Error(`${context} did not return lyrics. Please retry or provide Chinese lyrics manually.`);
+  }
+  if (!containsHanzi(lyrics) || looksLikeRomanizedLyrics(lyrics)) {
+    throw new Error(`${context} returned pinyin/romanized lyrics instead of Chinese Hanzi. Please retry or provide Chinese lyrics manually.`);
+  }
+}
+
+function isMissingCreateSampleEndpoint(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.includes('Not Found') || message.includes('404');
 }
 
 function buildQueryResultAudioUrl(file: string | undefined, fallbackUrl?: string): string {
@@ -584,16 +627,26 @@ interface AceStepQueryResultItem {
   duration?: number;
   keyscale?: string;
   timesignature?: string;
+  cot_caption?: string;
+  cot_lyrics?: string;
+  vocal_language?: string;
   metas?: {
     bpm?: number;
     duration?: number;
     keyscale?: string;
     timesignature?: string;
+    caption?: string;
+    lyrics?: string;
+    vocal_language?: string;
   };
 }
 
 function getResultPrompt(item?: AceStepQueryResultItem): string {
-  return item?.caption?.trim() || item?.prompt?.trim() || '';
+  return item?.caption?.trim() || item?.cot_caption?.trim() || item?.metas?.caption?.trim() || item?.prompt?.trim() || '';
+}
+
+function getResultLyrics(item?: AceStepQueryResultItem): string {
+  return item?.lyrics?.trim() || item?.cot_lyrics?.trim() || item?.metas?.lyrics?.trim() || '';
 }
 
 function getResultDuration(item?: AceStepQueryResultItem): number | undefined {
@@ -610,6 +663,103 @@ function getResultKeyScale(item?: AceStepQueryResultItem): string | undefined {
 
 function getResultTimeSignature(item?: AceStepQueryResultItem): string | undefined {
   return item?.timesignature || item?.metas?.timesignature;
+}
+
+interface AceStepCreateSampleResponse {
+  data?: {
+    caption?: string;
+    lyrics?: string;
+    bpm?: number;
+    duration?: number;
+    keyscale?: string;
+    key_scale?: string;
+    timesignature?: string;
+    time_signature?: string;
+    vocal_language?: string;
+  };
+  error?: string | null;
+}
+
+async function createAutoLyricsSample(params: GenerationParams, query: string): Promise<{
+  caption: string;
+  lyrics: string;
+  bpm?: number;
+  duration?: number;
+  keyScale?: string;
+  timeSignature?: string;
+  vocalLanguage?: string;
+}> {
+  const payload = await postAceStepJson<AceStepCreateSampleResponse>('/v1/create_sample', {
+    query,
+    instrumental: false,
+    vocal_language: params.vocalLanguage || 'zh',
+    temperature: params.lmTemperature ?? 0.8,
+  });
+
+  if (payload.error) {
+    throw new Error(payload.error);
+  }
+
+  const data = payload.data;
+  if (!data) {
+    throw new Error('ACE-Step create_sample did not return data');
+  }
+
+  return {
+    caption: data.caption?.trim() || '',
+    lyrics: data.lyrics?.trim() || '',
+    bpm: data.bpm,
+    duration: data.duration,
+    keyScale: data.keyscale || data.key_scale,
+    timeSignature: data.timesignature || data.time_signature,
+    vocalLanguage: data.vocal_language,
+  };
+}
+
+async function prepareAutoLyricsInputs(params: GenerationParams): Promise<{
+  prompt: string;
+  lyrics: string;
+  sampleQuery?: string;
+  generatedCaption?: string;
+  generatedBpm?: number;
+  generatedDuration?: number;
+  generatedKeyScale?: string;
+  generatedTimeSignature?: string;
+  generatedVocalLanguage?: string;
+}> {
+  const sampleQuery = buildAutoLyricsSampleQuery(params);
+  let sample = await createAutoLyricsSample(params, sampleQuery);
+
+  if (wantsChineseLyrics(params)) {
+    try {
+      validateChineseLyrics(sample.lyrics, 'ACE-Step create_sample');
+    } catch (firstError) {
+      const retryQuery = [
+        sampleQuery,
+        '',
+        'Return ONLY Chinese Hanzi lyrics. Do not use pinyin, roman letters, English words, or romaji in the lyrics.',
+        '歌词必须全部使用中文汉字。禁止拼音、罗马字、英文单词。',
+      ].join('\n');
+      sample = await createAutoLyricsSample(params, retryQuery);
+      try {
+        validateChineseLyrics(sample.lyrics, 'ACE-Step create_sample retry');
+      } catch {
+        throw firstError;
+      }
+    }
+  }
+
+  return {
+    prompt: sample.caption || buildPromptText(params),
+    lyrics: sample.lyrics,
+    sampleQuery,
+    generatedCaption: sample.caption,
+    generatedBpm: sample.bpm,
+    generatedDuration: sample.duration,
+    generatedKeyScale: sample.keyScale,
+    generatedTimeSignature: sample.timeSignature,
+    generatedVocalLanguage: sample.vocalLanguage,
+  };
 }
 
 // Health check - verify Gradio app is reachable
@@ -728,21 +878,35 @@ async function processGenerationViaRest(
     await switchModelIfNeeded(params.ditModel);
   }
 
-  const useSampleMode = shouldUseAutoLyricsMode(params);
-  const descriptionQuery = useSampleMode ? buildAutoLyricsSampleQuery(params) : '';
-  const prompt = useSampleMode ? '' : buildPromptText(params);
-  const lyrics = params.instrumental ? '[Instrumental]' : (params.lyrics || '');
+  const useAutoLyricsMode = shouldUseAutoLyricsMode(params);
+  let useSampleMode = false;
+  let fallbackSampleQuery = '';
+  let preparedAutoLyrics: Awaited<ReturnType<typeof prepareAutoLyricsInputs>> | null = null;
+  if (useAutoLyricsMode) {
+    try {
+      preparedAutoLyrics = await prepareAutoLyricsInputs(params);
+    } catch (error) {
+      if (!isMissingCreateSampleEndpoint(error)) {
+        throw error;
+      }
+      console.warn('ACE-Step /v1/create_sample is unavailable; using release_task sample_mode fallback.');
+      useSampleMode = true;
+      fallbackSampleQuery = buildAutoLyricsSampleQuery(params);
+    }
+  }
+  const prompt = preparedAutoLyrics?.prompt || buildPromptText(params);
+  const lyrics = params.instrumental ? '[Instrumental]' : (preparedAutoLyrics?.lyrics || params.lyrics || '');
 
   const requestBody: Record<string, unknown> = {
-    prompt,
+    prompt: useSampleMode ? '' : prompt,
     lyrics,
     sample_mode: useSampleMode,
-    sample_query: useSampleMode ? descriptionQuery : undefined,
-    duration: params.duration && params.duration > 0 ? params.duration : undefined,
-    bpm: params.bpm && params.bpm > 0 ? params.bpm : undefined,
-    key_scale: params.keyScale || undefined,
-    time_signature: params.timeSignature || undefined,
-    vocal_language: params.vocalLanguage || 'zh',
+    sample_query: useSampleMode ? fallbackSampleQuery : undefined,
+    duration: (params.duration && params.duration > 0 ? params.duration : undefined) || preparedAutoLyrics?.generatedDuration,
+    bpm: (params.bpm && params.bpm > 0 ? params.bpm : undefined) || preparedAutoLyrics?.generatedBpm,
+    key_scale: params.keyScale || preparedAutoLyrics?.generatedKeyScale || undefined,
+    time_signature: params.timeSignature || preparedAutoLyrics?.generatedTimeSignature || undefined,
+    vocal_language: preparedAutoLyrics?.generatedVocalLanguage || params.vocalLanguage || 'zh',
     inference_steps: params.inferenceSteps ?? 8,
     guidance_scale: params.guidanceScale ?? 7.0,
     batch_size: Math.min(Math.max(params.batchSize ?? 1, 1), 8),
@@ -761,7 +925,7 @@ async function processGenerationViaRest(
     if (requestBody[key] === undefined) delete requestBody[key];
   });
 
-  job.stage = useSampleMode
+  job.stage = useAutoLyricsMode
     ? 'Generating lyrics and music via ACE-Step service...'
     : 'Generating music via ACE-Step service...';
 
@@ -833,7 +997,10 @@ async function processGenerationViaRest(
   const primary = resultItems[0];
   const primaryDuration = getResultDuration(primary);
   const generatedCaption = getResultPrompt(primary);
-  const generatedLyrics = primary?.lyrics?.trim() || '';
+  const generatedLyrics = getResultLyrics(primary) || preparedAutoLyrics?.lyrics || '';
+  if (useAutoLyricsMode && wantsChineseLyrics(params)) {
+    validateChineseLyrics(generatedLyrics, 'ACE-Step generation result');
+  }
   const finalDuration = actualDuration > 0
     ? actualDuration
     : (
@@ -848,16 +1015,16 @@ async function processGenerationViaRest(
     bpm: getResultBpm(primary) || params.bpm,
     keyScale: getResultKeyScale(primary) || params.keyScale,
     timeSignature: getResultTimeSignature(primary) || params.timeSignature,
-    caption: generatedCaption || descriptionQuery || prompt,
+    caption: generatedCaption || preparedAutoLyrics?.generatedCaption || buildPromptText(params),
     lyrics: generatedLyrics || lyrics,
-    vocalLanguage: params.vocalLanguage,
+    vocalLanguage: preparedAutoLyrics?.generatedVocalLanguage || primary?.vocal_language || primary?.metas?.vocal_language || params.vocalLanguage,
     status: 'succeeded',
   };
   job.rawResponse = {
     releasePayload,
     queryPayload,
-    mode: useSampleMode ? 'sample_mode_rest' : 'rest',
-    sampleQuery: descriptionQuery || undefined,
+    mode: useAutoLyricsMode ? 'auto_lyrics_rest' : 'rest',
+    sampleQuery: preparedAutoLyrics?.sampleQuery || fallbackSampleQuery || undefined,
   };
   console.log(`Job ${jobId}: Completed via ACE-Step REST with ${audioUrls.length} audio files`);
 }
@@ -886,6 +1053,12 @@ async function processGeneration(
       await processGenerationViaRest(jobId, params, job);
       return;
     } catch (error) {
+      if (wantsChineseLyrics(params)) {
+        console.error(`Job ${jobId}: Chinese auto-lyrics generation failed`, error);
+        job.status = 'failed';
+        job.error = error instanceof Error ? error.message : 'Chinese auto-lyrics generation failed';
+        return;
+      }
       console.error(`Job ${jobId}: ACE-Step REST generation failed, falling back to Gradio/Python`, error);
     }
   }
@@ -1110,7 +1283,12 @@ async function processGenerationViaPython(
     if (params.lmTopK !== undefined && params.lmTopK > 0) args.push('--lm-top-k', String(params.lmTopK));
     if (params.lmTopP !== undefined) args.push('--lm-top-p', String(params.lmTopP));
     if (params.lmNegativePrompt) args.push('--lm-negative-prompt', params.lmNegativePrompt);
-    if (autoLyricsQuery) args.push('--sample-query', autoLyricsQuery);
+    let sampleQueryFile = '';
+    if (autoLyricsQuery) {
+      sampleQueryFile = path.join(jobOutputDir, '_sample_query.json');
+      await writeFile(sampleQueryFile, JSON.stringify({ sample_query: autoLyricsQuery }), 'utf-8');
+      args.push('--sample-query-file', sampleQueryFile);
+    }
     if (params.lmBackend) args.push('--lm-backend', params.lmBackend);
     if (params.lmModel) args.push('--lm-model-path', params.lmModel);
     if (params.useCotMetas === false) args.push('--no-cot-metas');
@@ -1211,6 +1389,8 @@ function runPythonGeneration(scriptArgs: string[], timeoutMs = 600000): Promise<
       env: {
         ...process.env,
         ACESTEP_PATH: ACESTEP_DIR,
+        PYTHONIOENCODING: 'utf-8',
+        PYTHONUTF8: '1',
       },
     });
 

@@ -92,8 +92,9 @@ echo [1/3] Starting ACE-Step API server...
 netstat -ano | findstr /r /c:":8001 .*LISTENING" >nul
 if %ERRORLEVEL% EQU 0 (
     echo [1/3] ACE-Step API is already running on port 8001. Skipping.
+    powershell -NoProfile -Command "$pid=(Get-NetTCPConnection -LocalPort 8001 -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty OwningProcess); if ($pid) { Get-CimInstance Win32_Process -Filter \"ProcessId=$pid\" | ForEach-Object { Write-Host ('      Existing PID: ' + $_.ProcessId); Write-Host ('      CommandLine: ' + $_.CommandLine) } }"
 ) else (
-    start "ACE-Step API Server" cmd /k "set PATH=%PINOKIO_NODE_PATH%;%PATH% && set MASTER_ADDR=127.0.0.1 && set VLLM_HOST_IP=127.0.0.1 && set ACESTEP_LM_BACKEND=pt && set ACESTEP_LM_OFFLOAD_TO_CPU=true && cd /d %ACESTEP_PATH% && %API_COMMAND%"
+    start "ACE-Step API Server" cmd /k "set PATH=%PINOKIO_NODE_PATH%;%PATH% && set MASTER_ADDR=127.0.0.1 && set VLLM_HOST_IP=127.0.0.1 && set ACESTEP_LM_BACKEND=pt && set ACESTEP_LM_OFFLOAD_TO_CPU=true && set ACESTEP_OFFLOAD_TO_CPU=true && set ACESTEP_OFFLOAD_DIT_TO_CPU=true && set ACESTEP_USE_FLASH_ATTENTION=false && cd /d %ACESTEP_PATH% && %API_COMMAND%"
 )
 
 REM Wait for API to start

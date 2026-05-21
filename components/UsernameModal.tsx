@@ -63,8 +63,7 @@ export const UsernameModal: React.FC<UsernameModalProps> = ({ isOpen, onSubmit }
 
       {/* Modal */}
       <div className="relative w-full max-w-md bg-zinc-900 rounded-2xl shadow-2xl border border-white/10 overflow-hidden">
-        {/* Header gradient */}
-        <div className="h-2" style={{ backgroundImage: 'var(--vs-gradient-main)' }} />
+        <div className="h-2 bg-[#5483B3]" />
 
         <div className="p-8">
           {/* Logo */}
@@ -78,9 +77,7 @@ export const UsernameModal: React.FC<UsernameModalProps> = ({ isOpen, onSubmit }
           <h2 className="text-2xl font-bold text-center text-white mb-2">
             {mode === 'login' ? '登录 Vsinger Studio' : '注册新用户'}
           </h2>
-          <p className="text-zinc-400 text-center mb-8">
-            {mode === 'login' ? 'ASH 用户默认密码为 123456' : '创建独立账号后，歌曲和虚拟歌手数据会按账号分开保存'}
-          </p>
+          <div className="mb-8" />
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -120,7 +117,7 @@ export const UsernameModal: React.FC<UsernameModalProps> = ({ isOpen, onSubmit }
                   id="username"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  placeholder="ASH"
+                  placeholder="输入用户名"
                   className="vs-accent-focus w-full pl-10 pr-4 py-3 bg-zinc-800 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 transition-all"
                   autoFocus
                   disabled={isLoading}
@@ -177,7 +174,7 @@ export const UsernameModal: React.FC<UsernameModalProps> = ({ isOpen, onSubmit }
             <button
               type="submit"
               disabled={isLoading || !username.trim() || !password}
-              className="vs-gradient-button w-full py-3 text-white font-semibold rounded-xl disabled:opacity-50 disabled:cursor-not-allowed transition-all transform hover:scale-[1.02] active:scale-[0.98]"
+              className="w-full rounded-xl bg-[#C1EBFF] py-3 font-semibold text-[#052659] transition-all hover:bg-[#b4e5fb] disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isLoading ? (
                 <span className="flex items-center justify-center gap-2">

@@ -40,8 +40,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <div className={`fixed left-0 top-0 z-50 flex h-full flex-col overflow-y-auto border-r border-zinc-200 bg-white py-4 transition-all dark:border-white/10 dark:bg-suno-sidebar md:relative ${isOpen ? 'w-[208px]' : 'w-[76px]'}`}>
         <div className="mb-8 flex items-center justify-between px-3">
           <div className="flex items-center gap-3">
-            <button type="button" onClick={() => onNavigate('create')} className="vs-gradient-icon flex h-10 w-10 items-center justify-center rounded-full shadow-lg">
-              <Disc size={18} />
+            <button type="button" onClick={() => onNavigate('create')} className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-white shadow-lg">
+              <img src="/logo.png" alt="Vsinger Studio" className="h-full w-full object-cover" />
             </button>
             {isOpen && <span className="gradient-text text-lg font-bold">Vsinger Studio</span>}
           </div>
@@ -60,7 +60,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               onClick={() => onNavigate(item.view)}
               className={`flex items-center gap-3 rounded-2xl px-3 py-3 text-sm font-medium transition ${
                 currentView === item.view
-                  ? 'vs-accent-surface vs-accent-text-strong border border-[rgba(84,131,179,0.2)] dark:text-white'
+                  ? 'border border-zinc-200 bg-zinc-100 text-zinc-900 dark:border-white/10 dark:bg-white/10 dark:text-white'
                   : 'text-zinc-500 hover:bg-[rgba(193,235,255,0.28)] hover:text-[#052659] dark:text-zinc-400 dark:hover:bg-[rgba(84,131,179,0.12)] dark:hover:text-[#C1EBFF]'
               } ${isOpen ? 'justify-start' : 'justify-center'}`}
             >

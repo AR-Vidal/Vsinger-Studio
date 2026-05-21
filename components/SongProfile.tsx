@@ -3,7 +3,7 @@ import { Song } from '../types';
 import { songsApi, getAudioUrl } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useI18n } from '../context/I18nContext';
-import { ArrowLeft, Play, Pause, Heart, Share2, MoreHorizontal, ThumbsDown, Music as MusicIcon, Edit3, Eye } from 'lucide-react';
+import { ArrowLeft, Play, Pause, Heart, Share2, MoreHorizontal, Music as MusicIcon, Edit3, Eye } from 'lucide-react';
 import { ShareModal } from './ShareModal';
 import { SongDropdownMenu } from './SongDropdownMenu';
 
@@ -269,7 +269,6 @@ export const SongProfile: React.FC<SongProfileProps> = ({ songId, onBack, onPlay
                                 className={`flex items-center gap-2 px-3 py-2 rounded-full text-sm transition-colors ${isLiked ? 'bg-pink-500 text-white' : 'bg-zinc-200 dark:bg-zinc-900 hover:bg-zinc-300 dark:hover:bg-zinc-800 text-zinc-900 dark:text-white'}`}
                             >
                                 <Heart size={16} className={isLiked ? 'fill-current' : ''} />
-                                <span className="font-semibold">{song.likeCount || 0}</span>
                             </button>
                             {user?.id === song.userId && (
                                 <button

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Download, FileAudio, Loader2, Play, Save, Settings2, Sparkles, Upload, Wand2 } from 'lucide-react';
 import { singersApi, trainingApi } from '../services/api';
 import { useAuth } from '../context/AuthContext';
@@ -56,6 +56,41 @@ export const TrainingPanel: React.FC<TrainingPanelProps> = ({
     () => singers.find((singer) => singer.id === selectedSingerId) || null,
     [selectedSingerId, singers],
   );
+
+  useEffect(() => {
+    if (!token || busyAction !== 'train') return;
+
+    let cancelled = false;
+    const timer = window.setInterval(async () => {
+      try {
+        const status = await trainingApi.getTrainingStatus(token);
+        if (cancelled) return;
+
+        const lines = [
+          status.progress,
+          status.log,
+          status.error ? `Error: ${status.error}` : '',
+        ].filter(Boolean);
+        setTrainingStatus(lines.join('\n\n') || (status.running ? 'Training is running...' : 'Training is idle.'));
+
+        if (!status.running) {
+          setBusyAction(null);
+          if (!status.error) {
+            setTab('export');
+          }
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setTrainingStatus(error instanceof Error ? error.message : 'Failed to refresh training status.');
+        }
+      }
+    }, 5000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [busyAction, token]);
 
   const refreshSingers = async () => {
     if (!token) return;
@@ -193,12 +228,9 @@ export const TrainingPanel: React.FC<TrainingPanelProps> = ({
 
     try {
       const result = await trainingApi.startTraining(trainingParams, token);
-      setTrainingStatus(result.progress || result.log || '训练已启动。');
-      setTab('export');
+      setTrainingStatus(result.progress || result.status || 'Training started.');
     } catch (error) {
       setTrainingStatus(error instanceof Error ? error.message : '训练失败。');
-    } finally {
-      setBusyAction(null);
     }
   };
 

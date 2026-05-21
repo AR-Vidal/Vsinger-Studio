@@ -272,7 +272,7 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
               value={songDescription}
               onChange={(event) => setSongDescription(event.target.value)}
               className="vs-accent-focus min-h-[112px] w-full rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm outline-none transition dark:border-white/10 dark:bg-black/20 dark:text-white"
-              placeholder="例如：温柔女声、带一点梦幻电子感、适合夜晚通勤聆听。"
+              placeholder="创作一首欢快的流行电子舞曲。"
             />
             <div className="mt-4 grid gap-3 md:grid-cols-2">
               <label className="block">

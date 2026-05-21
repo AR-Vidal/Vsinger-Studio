@@ -115,8 +115,8 @@ def main():
 
         # Favor CPU offload on CUDA by default for 12GB-class GPUs unless the user explicitly disables it.
         offload_to_cpu = env_bool("ACESTEP_OFFLOAD_TO_CPU", default=torch.cuda.is_available())
-        offload_dit_to_cpu = env_bool("ACESTEP_OFFLOAD_DIT_TO_CPU", default=False)
-        use_flash_attention = env_bool("ACESTEP_USE_FLASH_ATTENTION", default=True)
+        offload_dit_to_cpu = env_bool("ACESTEP_OFFLOAD_DIT_TO_CPU", default=torch.cuda.is_available())
+        use_flash_attention = env_bool("ACESTEP_USE_FLASH_ATTENTION", default=False)
         compile_model = env_bool("ACESTEP_COMPILE_MODEL", default=False)
 
         handler = AceStepHandler()
@@ -162,6 +162,20 @@ def main():
 
     safe_print(f"Done: {status}")
     safe_print(f"Output files: {len(output_paths)}")
+
+    failed = " failed)" in status or " failed" in status
+    if len(output_paths) == 0 or failed:
+        message = status
+        if args.json:
+            safe_print(json.dumps({
+                "status": "error",
+                "message": message,
+                "output_files": len(output_paths),
+                "output_dir": args.output,
+                "labeled": labeled_count,
+                "total": total_count,
+            }))
+        sys.exit(1)
 
     if args.json:
         safe_print(json.dumps({
