@@ -36,6 +36,11 @@ export const translations = {
     generationFailed: 'Generation failed. Please try again.',
     playlistCreated: 'Playlist created successfully!',
     failedToCreatePlaylist: 'Failed to create playlist',
+    playlistUpdated: 'Playlist updated successfully',
+    failedToUpdatePlaylist: 'Failed to update playlist',
+    playlistDeleted: 'Playlist deleted successfully',
+    failedToDeletePlaylist: 'Failed to delete playlist',
+    coverUploadFailed: 'Failed to upload playlist cover',
     songAddedToPlaylist: 'Song added to playlist',
     failedToAddSong: 'Failed to add song to playlist',
     songDeleted: 'Song deleted successfully',
@@ -426,6 +431,10 @@ export const translations = {
     
     // Playlist Modals
     createPlaylist: 'Create Playlist',
+    editPlaylist: 'Edit Playlist',
+    playlistCover: 'Cover',
+    uploadCover: 'Upload Cover',
+    coverFormats: 'JPEG, PNG, WebP, or GIF up to 5MB',
     playlistName: 'Name',
     playlistNamePlaceholder: 'My Awesome Playlist',
     playlistDescription: 'Description',
@@ -474,6 +483,7 @@ export const translations = {
     // PlaylistDetail
     loadingPlaylist: 'Loading playlist...',
     playlistNotFound: 'Playlist not found',
+    deletePlaylistTitle: 'Delete Playlist',
     deletePlaylistConfirm: 'Are you sure you want to delete this playlist?',
     artist: 'Artist',
     deletePlaylist: 'Delete Playlist',
@@ -611,6 +621,11 @@ export const translations = {
     generationFailed: '生成失败，请重试。',
     playlistCreated: '歌单创建成功！',
     failedToCreatePlaylist: '创建歌单失败',
+    playlistUpdated: '歌单已更新',
+    failedToUpdatePlaylist: '更新歌单失败',
+    playlistDeleted: '歌单已删除',
+    failedToDeletePlaylist: '删除歌单失败',
+    coverUploadFailed: '封面上传失败',
     songAddedToPlaylist: '已添加到歌单',
     failedToAddSong: '添加歌曲失败',
     songDeleted: '歌曲删除成功',
@@ -1001,6 +1016,10 @@ export const translations = {
     
     // Playlist Modals
     createPlaylist: '创建播放列表',
+    editPlaylist: '编辑播放列表',
+    playlistCover: '封面',
+    uploadCover: '上传封面',
+    coverFormats: '支持 JPEG、PNG、WebP 或 GIF，最大 5MB',
     playlistName: '名称',
     playlistNamePlaceholder: '我的超棒播放列表',
     playlistDescription: '描述',
@@ -1049,6 +1068,7 @@ export const translations = {
     // PlaylistDetail
     loadingPlaylist: '加载播放列表中...',
     playlistNotFound: '播放列表未找到',
+    deletePlaylistTitle: '删除播放列表',
     deletePlaylistConfirm: '确定要删除这个播放列表吗？',
     artist: '艺术家',
     deletePlaylist: '删除播放列表',
@@ -1186,6 +1206,11 @@ export const translations = {
     generationFailed: '生成に失敗しました。もう一度お試しください。',
     playlistCreated: 'プレイリストを作成しました！',
     failedToCreatePlaylist: 'プレイリストの作成に失敗しました',
+    playlistUpdated: 'プレイリストを更新しました',
+    failedToUpdatePlaylist: 'プレイリストの更新に失敗しました',
+    playlistDeleted: 'プレイリストを削除しました',
+    failedToDeletePlaylist: 'プレイリストの削除に失敗しました',
+    coverUploadFailed: 'カバー画像のアップロードに失敗しました',
     songAddedToPlaylist: 'プレイリストに追加しました',
     failedToAddSong: '曲の追加に失敗しました',
     songDeleted: '曲を削除しました',
@@ -1576,6 +1601,10 @@ export const translations = {
     
     // Playlist Modals
     createPlaylist: 'プレイリストを作成',
+    editPlaylist: 'プレイリストを編集',
+    playlistCover: 'カバー',
+    uploadCover: 'カバーをアップロード',
+    coverFormats: 'JPEG、PNG、WebP、GIF、最大5MB',
     playlistName: '名前',
     playlistNamePlaceholder: '私の素晴らしいプレイリスト',
     playlistDescription: '説明',
@@ -1624,6 +1653,7 @@ export const translations = {
     // PlaylistDetail
     loadingPlaylist: 'プレイリストを読み込み中...',
     playlistNotFound: 'プレイリストが見つかりません',
+    deletePlaylistTitle: 'プレイリストを削除',
     deletePlaylistConfirm: 'このプレイリストを削除してもよろしいですか？',
     artist: 'アーティスト',
     deletePlaylist: 'プレイリストを削除',
@@ -1761,6 +1791,11 @@ export const translations = {
     generationFailed: '생성에 실패했습니다. 다시 시도해주세요.',
     playlistCreated: '재생목록이 생성되었습니다!',
     failedToCreatePlaylist: '재생목록 생성에 실패했습니다',
+    playlistUpdated: '재생목록이 업데이트되었습니다',
+    failedToUpdatePlaylist: '재생목록 업데이트에 실패했습니다',
+    playlistDeleted: '재생목록이 삭제되었습니다',
+    failedToDeletePlaylist: '재생목록 삭제에 실패했습니다',
+    coverUploadFailed: '커버 업로드에 실패했습니다',
     songAddedToPlaylist: '재생목록에 추가되었습니다',
     failedToAddSong: '곡 추가에 실패했습니다',
     songDeleted: '곡이 삭제되었습니다',
@@ -2151,6 +2186,10 @@ export const translations = {
     
     // Playlist Modals
     createPlaylist: '재생목록 만들기',
+    editPlaylist: '재생목록 편집',
+    playlistCover: '커버',
+    uploadCover: '커버 업로드',
+    coverFormats: 'JPEG, PNG, WebP, GIF 최대 5MB',
     playlistName: '이름',
     playlistNamePlaceholder: '내 멋진 재생목록',
     playlistDescription: '설명',
@@ -2199,6 +2238,7 @@ export const translations = {
     // PlaylistDetail
     loadingPlaylist: '재생목록 로딩 중...',
     playlistNotFound: '재생목록을 찾을 수 없습니다',
+    deletePlaylistTitle: '재생목록 삭제',
     deletePlaylistConfirm: '이 재생목록을 삭제하시겠습니까?',
     artist: '아티스트',
     deletePlaylist: '재생목록 삭제',

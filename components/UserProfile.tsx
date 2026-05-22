@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Song, Playlist } from '../types';
-import { usersApi, getAudioUrl, UserProfile as UserProfileType, songsApi } from '../services/api';
+import { usersApi, UserProfile as UserProfileType, songsApi } from '../services/api';
+import { normalizeSongs } from '../utils/songNormalizer';
 import { useAuth } from '../context/AuthContext';
 import { ArrowLeft, Play, Pause, Heart, Eye, Users, Music as MusicIcon, ChevronRight, MoreHorizontal, Edit3, X, Camera, Image as ImageIcon, Upload, Loader2 } from 'lucide-react';
 import { useI18n } from '../context/I18nContext';
@@ -60,22 +61,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({ username, onBack, onPl
             setEditAvatarUrl(profileRes.user.avatar_url || '');
             setEditBannerUrl(profileRes.user.banner_url || '');
 
-            const transformedSongs: Song[] = songsRes.songs.map(s => ({
-                id: s.id,
-                title: s.title,
-                lyrics: s.lyrics,
-                style: s.style,
-                coverUrl: `https://picsum.photos/seed/${s.id}/400/400`,
-                duration: s.duration ? `${Math.floor(s.duration / 60)}:${String(Math.floor(s.duration % 60)).padStart(2, '0')}` : '0:00',
-                createdAt: new Date(s.created_at),
-                tags: s.tags || [],
-                audioUrl: getAudioUrl(s.audio_url, s.id),
-                isPublic: true,
-                likeCount: s.like_count || 0,
-                viewCount: s.view_count || 0,
-                creator: s.creator,
-            }));
-            setPublicSongs(transformedSongs);
+            setPublicSongs(normalizeSongs(songsRes.songs).map(song => ({ ...song, isPublic: true })));
             setPublicPlaylists(playlistsRes.playlists || []);
         } catch (error) {
             console.error('Failed to load user profile:', error);

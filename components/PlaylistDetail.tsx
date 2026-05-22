@@ -1,63 +1,61 @@
-import React, { useState, useEffect } from 'react';
-import { Song, Playlist, playlistsApi, songsApi, getAudioUrl } from '../services/api';
+import React, { useEffect, useState } from 'react';
+import { ArrowLeft, Clock, Edit2, Music, Play, Trash2 } from 'lucide-react';
+import { playlistsApi } from '../services/api';
+import { Playlist, Song } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { useI18n } from '../context/I18nContext';
-import { ArrowLeft, Play, MoreHorizontal, Clock, Calendar, Shuffle, Trash2, Mic2, Music } from 'lucide-react';
+import { normalizeSongs } from '../utils/songNormalizer';
 
 interface PlaylistDetailProps {
     playlistId: string;
+    currentPlaylist?: Playlist;
     onBack: () => void;
     onPlaySong: (song: Song, list?: Song[]) => void;
     onSelect: (song: Song) => void;
     onNavigateToProfile: (username: string) => void;
+    onEditPlaylist: (playlist: Playlist) => void;
+    onDeletePlaylist: (playlist: Playlist) => void;
 }
 
-const getSongArtistName = (song: Song): string => {
-    const row = song as any;
-    return row.singer_name || row.singerName || row.singer_name_snapshot || row.singerNameSnapshot || '虚拟歌手';
-};
+const getSongArtistName = (song: Song): string => (
+    song.singerName || song.singerNameSnapshot || '虚拟歌手'
+);
 
-export const PlaylistDetail: React.FC<PlaylistDetailProps> = ({ playlistId, onBack, onPlaySong, onSelect, onNavigateToProfile }) => {
+export const PlaylistDetail: React.FC<PlaylistDetailProps> = ({
+    playlistId,
+    currentPlaylist,
+    onBack,
+    onPlaySong,
+    onSelect,
+    onNavigateToProfile,
+    onEditPlaylist,
+    onDeletePlaylist,
+}) => {
     const { user: currentUser, token } = useAuth();
     const { t } = useI18n();
-    const [playlist, setPlaylist] = useState<Playlist & { creator_avatar?: string } | null>(null);
-    const [songs, setSongs] = useState<Song[]>([]);
+    const [playlist, setPlaylist] = useState<(Playlist & { creator_avatar?: string }) | null>(null);
+    const [songs, setSongs] = useState<Array<Song & { addedAt?: string }>>([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        loadPlaylist();
+        void loadPlaylist();
     }, [playlistId]);
+
+    useEffect(() => {
+        if (!currentPlaylist || currentPlaylist.id !== playlistId) return;
+        setPlaylist(prev => prev ? { ...prev, ...currentPlaylist } : { ...currentPlaylist });
+    }, [currentPlaylist, playlistId]);
 
     const loadPlaylist = async () => {
         setLoading(true);
         try {
             const res = await playlistsApi.getPlaylist(playlistId, token);
-            // res.playlist comes from DB row, which now includes creator_avatar
             setPlaylist(res.playlist as any);
-
-            const mappedSongs: Song[] = res.songs.map((s: any) => ({
-                id: s.id,
-                title: s.title,
-                lyrics: s.lyrics,
-                style: s.style,
-                coverUrl: s.cover_url || s.coverUrl || `https://picsum.photos/seed/${s.id}/400/400`,
-                audioUrl: getAudioUrl(s.audio_url || s.audioUrl, s.id),
-                duration: s.duration,
-                bpm: s.bpm,
-                tags: s.tags || [],
-                is_public: s.is_public || false,
-                likeCount: s.like_count || 0,
-                viewCount: s.view_count || 0,
-                creator: s.creator,
-                singer_id: s.singer_id || s.singerId || null,
-                singer_name: s.singer_name || s.singerName || s.singer_name_snapshot || null,
-                singer_name_snapshot: s.singer_name_snapshot || s.singerNameSnapshot || null,
-                has_singer: Boolean(s.has_singer ?? s.hasSinger),
-                created_at: s.created_at,
-                addedAt: s.added_at
+            const normalizedSongs = normalizeSongs(res.songs).map((song, index) => ({
+                ...song,
+                addedAt: res.songs[index]?.added_at,
             }));
-
-            setSongs(mappedSongs);
+            setSongs(normalizedSongs);
         } catch (error) {
             console.error('Failed to load playlist:', error);
         } finally {
@@ -65,141 +63,125 @@ export const PlaylistDetail: React.FC<PlaylistDetailProps> = ({ playlistId, onBa
         }
     };
 
-    // ... (retaining methods handleRemove, handleDelete) ...
     const handleRemoveSong = async (songId: string) => {
         if (!token || !playlist) return;
         try {
             await playlistsApi.removeSong(playlist.id, songId, token);
-            setSongs(prev => prev.filter(s => s.id !== songId));
+            setSongs(prev => prev.filter(song => song.id !== songId));
         } catch (error) {
             console.error('Failed to remove song:', error);
         }
     };
 
-    const handleDeletePlaylist = async () => {
-        if (!token || !playlist) return;
-        if (!confirm(t('deletePlaylistConfirm'))) return;
-        try {
-            await playlistsApi.delete(playlist.id, token);
-            onBack();
-        } catch (error) {
-            console.error('Failed to delete playlist:', error);
-        }
-    };
-
-    if (loading) return (
-        <div className="flex items-center justify-center h-full bg-black">
-            <div className="text-zinc-400 gap-2 flex items-center">
-                <div className="w-4 h-4 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin"></div>
-                {t('loadingPlaylist')}
+    if (loading) {
+        return (
+            <div className="flex h-full items-center justify-center bg-white">
+                <div className="flex items-center gap-2 text-zinc-500">
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-zinc-400 border-t-transparent" />
+                    {t('loadingPlaylist')}
+                </div>
             </div>
-        </div>
-    );
+        );
+    }
 
-    if (!playlist) return (
-        <div className="flex flex-col items-center justify-center h-full gap-4 bg-black">
-            <div className="text-zinc-400">{t('playlistNotFound')}</div>
-            <button onClick={onBack} className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-white">
-                {t('goBack')}
-            </button>
-        </div>
-    );
+    if (!playlist) {
+        return (
+            <div className="flex h-full flex-col items-center justify-center gap-4 bg-white">
+                <div className="text-zinc-500">{t('playlistNotFound')}</div>
+                <button onClick={onBack} className="rounded-lg bg-zinc-900 px-4 py-2 text-white hover:bg-zinc-800">
+                    {t('goBack')}
+                </button>
+            </div>
+        );
+    }
 
     const isOwner = currentUser?.id === playlist.user_id;
-
-    // Gradient based on ID/Name
-    const gradients = [
-        'from-purple-900 to-black',
-        'from-blue-900 to-black',
-        'from-indigo-900 to-black',
-        'from-rose-900 to-black',
-    ];
-    const bgGradient = gradients[playlist.name.length % gradients.length];
+    const totalDuration = songs.reduce((acc, song) => acc + (song.durationSeconds || 0), 0);
 
     return (
-        <div className={`w-full h-full flex flex-col bg-gradient-to-b ${bgGradient} overflow-hidden`}>
-            {/* Header */}
-            <div className="flex-shrink-0 p-4 md:p-8 pt-12 md:pt-8 flex flex-col md:flex-row gap-4 md:gap-8 items-center md:items-end bg-black/20 backdrop-blur-lg border-b border-white/10">
-                {/* Cover */}
-                <div className="w-32 h-32 md:w-52 md:h-52 shadow-2xl rounded-lg bg-zinc-800 flex items-center justify-center overflow-hidden flex-shrink-0 group relative">
-                    {playlist.cover_url ? (
-                        <img src={playlist.cover_url} alt={playlist.name} className="w-full h-full object-cover" />
+        <div className="flex h-full w-full flex-col overflow-hidden bg-white text-zinc-900">
+            <div className="flex-shrink-0 border-b border-zinc-200 bg-white p-4 pt-12 md:flex md:items-end md:gap-8 md:p-8">
+                <div className="mx-auto flex h-32 w-32 flex-shrink-0 items-center justify-center overflow-hidden rounded-lg bg-zinc-100 shadow-xl md:mx-0 md:h-52 md:w-52">
+                    {playlist.coverUrl || playlist.cover_url ? (
+                        <img src={playlist.coverUrl || playlist.cover_url} alt={playlist.name} className="h-full w-full object-cover" />
                     ) : (
-                        <div className="w-full h-full bg-gradient-to-br from-zinc-700 to-zinc-900 flex items-center justify-center">
-                            <Music size={40} className="text-white/20 md:hidden" />
-                            <Music size={64} className="text-white/20 hidden md:block" />
-                            <span className="text-4xl md:text-6xl font-bold text-white/10">{playlist.name[0].toUpperCase()}</span>
+                        <div className="flex h-full w-full items-center justify-center bg-zinc-100">
+                            <Music size={64} className="text-zinc-300" />
                         </div>
                     )}
                 </div>
 
-                {/* Info */}
-                <div className="flex-1 space-y-2 md:space-y-4 text-center md:text-left">
-                    <span className="text-xs font-bold tracking-wider uppercase text-white/80">{t('playlist')}</span>
-                    <h1 className="text-2xl md:text-5xl lg:text-7xl font-bold text-white tracking-tight leading-none drop-shadow-lg">
+                <div className="mt-4 flex-1 space-y-3 text-center md:mt-0 md:text-left">
+                    <span className="text-xs font-bold uppercase tracking-wider text-zinc-500">{t('playlist')}</span>
+                    <h1 className="text-2xl font-bold leading-none tracking-tight text-zinc-900 md:text-5xl lg:text-7xl">
                         {playlist.name}
                     </h1>
                     {playlist.description && (
-                        <p className="text-zinc-300 text-sm max-w-2xl hidden md:block">{playlist.description}</p>
+                        <p className="hidden max-w-2xl text-sm text-zinc-600 md:block">{playlist.description}</p>
                     )}
-
-                    <div className="flex items-center justify-center md:justify-start gap-2 text-sm text-white font-medium flex-wrap">
+                    <div className="flex flex-wrap items-center justify-center gap-2 text-sm font-medium text-zinc-700 md:justify-start">
                         {playlist.creator && (
                             <div
-                                className="flex items-center gap-2 cursor-pointer hover:underline"
+                                className="flex cursor-pointer items-center gap-2 hover:underline"
                                 onClick={() => onNavigateToProfile(playlist.creator!)}
                             >
-                                {playlist.creator_avatar ? (
-                                    <img src={playlist.creator_avatar} alt={playlist.creator} className="w-5 h-5 md:w-6 md:h-6 rounded-full object-cover" />
+                                {(playlist as any).creator_avatar ? (
+                                    <img src={(playlist as any).creator_avatar} alt={playlist.creator} className="h-6 w-6 rounded-full object-cover" />
                                 ) : (
-                                    <div className="w-5 h-5 md:w-6 md:h-6 rounded-full bg-gradient-to-r from-green-400 to-blue-500"></div>
+                                    <div className="h-6 w-6 rounded-full bg-zinc-300" />
                                 )}
                                 <span>{playlist.creator}</span>
                             </div>
                         )}
-                        <span className="w-1 h-1 rounded-full bg-white/50"></span>
+                        <span className="h-1 w-1 rounded-full bg-zinc-300" />
                         <span>{songs.length} {t('songs')}</span>
-                        <span className="w-1 h-1 rounded-full bg-white/50 hidden md:block"></span>
-                        <span className="text-zinc-400 hidden md:block">
-                            {songs.reduce((acc, s) => acc + (s.duration ? (typeof s.duration === 'string' ? 0 : s.duration) : 0), 0) > 0
-                                ? Math.floor(songs.reduce((acc, s) => acc + (s.duration as number || 0), 0) / 60) + " " + t('min')
-                                : ""}
-                        </span>
+                        {totalDuration > 0 && (
+                            <>
+                                <span className="hidden h-1 w-1 rounded-full bg-zinc-300 md:block" />
+                                <span className="hidden text-zinc-500 md:block">{Math.floor(totalDuration / 60)} {t('min')}</span>
+                            </>
+                        )}
                     </div>
                 </div>
             </div>
 
-            {/* Actions Bar */}
-            <div className="px-4 md:px-8 py-3 md:py-4 bg-black/20 flex items-center gap-3 md:gap-4">
+            <div className="flex items-center gap-3 border-b border-zinc-200 bg-white px-4 py-3 md:px-8 md:py-4">
                 <button
                     onClick={() => songs.length > 0 && onPlaySong(songs[0], songs)}
-                    className="w-12 h-12 md:w-14 md:h-14 rounded-full bg-green-500 hover:scale-105 transition-transform flex items-center justify-center text-black shadow-lg"
+                    className="flex h-12 w-12 items-center justify-center rounded-full bg-green-500 text-black shadow-lg transition-transform hover:scale-105 md:h-14 md:w-14"
+                    title={t('play')}
                 >
                     <Play size={24} fill="currentColor" className="ml-1" />
                 </button>
 
                 {isOwner && (
-                    <button
-                        onClick={handleDeletePlaylist}
-                        className="text-zinc-400 hover:text-red-500 transition-colors p-2"
-                        title={t('deletePlaylist')}
-                    >
-                        <Trash2 size={20} />
-                    </button>
+                    <>
+                        <button
+                            onClick={() => onEditPlaylist(playlist)}
+                            className="p-2 text-zinc-500 transition-colors hover:text-zinc-900"
+                            title={t('editPlaylist')}
+                        >
+                            <Edit2 size={20} />
+                        </button>
+                        <button
+                            onClick={() => onDeletePlaylist(playlist)}
+                            className="p-2 text-zinc-500 transition-colors hover:text-red-600"
+                            title={t('deletePlaylist')}
+                        >
+                            <Trash2 size={20} />
+                        </button>
+                    </>
                 )}
 
-                <div className="flex-1"></div>
-
-                <div className="text-zinc-400 text-xs md:text-sm">
-                    {playlist.is_public ? t('public') : t('private')}
+                <div className="flex-1" />
+                <div className="text-xs text-zinc-500 md:text-sm">
+                    {playlist.isPublic ?? playlist.is_public ? t('public') : t('private')}
                 </div>
             </div>
 
-            {/* Song List */}
-            <div className="flex-1 overflow-y-auto bg-black/40">
-                <div className="px-2 md:px-8 py-2 md:py-4 pb-24 lg:pb-32">
-                    {/* Desktop Header */}
-                    <div className="hidden md:grid grid-cols-[16px_4fr_3fr_2fr_minmax(120px,1fr)] gap-4 px-4 py-2 border-b border-white/10 text-sm font-medium text-zinc-400 mb-2 sticky top-0 bg-[#121212] z-10">
+            <div className="flex-1 overflow-y-auto bg-white">
+                <div className="px-2 py-2 pb-24 md:px-8 md:py-4 lg:pb-32">
+                    <div className="sticky top-0 z-10 mb-2 hidden grid-cols-[16px_4fr_3fr_2fr_minmax(120px,1fr)] gap-4 border-b border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-500 md:grid">
                         <span>#</span>
                         <span>{t('title')}</span>
                         <span>{t('artist')}</span>
@@ -211,75 +193,61 @@ export const PlaylistDetail: React.FC<PlaylistDetailProps> = ({ playlistId, onBa
                         {songs.map((song, index) => (
                             <div
                                 key={song.id}
-                                className="group flex md:grid md:grid-cols-[16px_4fr_3fr_2fr_minmax(120px,1fr)] gap-3 md:gap-4 px-2 md:px-4 py-3 rounded-md hover:bg-white/10 items-center transition-colors text-sm text-zinc-400 hover:text-white cursor-pointer"
+                                className="group flex cursor-pointer items-center gap-3 rounded-md px-2 py-3 text-sm text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900 md:grid md:grid-cols-[16px_4fr_3fr_2fr_minmax(120px,1fr)] md:gap-4 md:px-4"
                                 onClick={() => {
                                     onSelect(song);
                                     onPlaySong(song, songs);
                                 }}
                             >
-                                {/* Index - hidden on mobile */}
-                                <span className="hidden md:block group-hover:text-white">{index + 1}</span>
-
-                                {/* Cover + Title */}
-                                <div className="flex items-center gap-3 overflow-hidden flex-1 md:flex-none">
-                                    <div className="w-12 h-12 md:w-10 md:h-10 rounded bg-zinc-800 flex-shrink-0 overflow-hidden relative group/img">
-                                        <img src={song.coverUrl} alt="" className="w-full h-full object-cover" />
+                                <span className="hidden md:block">{index + 1}</span>
+                                <div className="flex min-w-0 flex-1 items-center gap-3 md:flex-none">
+                                    <div className="group/img relative h-12 w-12 flex-shrink-0 overflow-hidden rounded bg-zinc-100 md:h-10 md:w-10">
+                                        <img src={song.coverUrl} alt="" className="h-full w-full object-cover" />
                                         <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
+                                            onClick={(event) => {
+                                                event.stopPropagation();
                                                 onPlaySong(song, songs);
                                             }}
-                                            className="absolute inset-0 bg-black/50 flex md:hidden group-hover/img:flex items-center justify-center text-white"
+                                            className="absolute inset-0 flex items-center justify-center bg-black/50 text-white md:hidden md:group-hover/img:flex"
+                                            title={t('play')}
                                         >
                                             <Play size={16} fill="white" />
                                         </button>
                                     </div>
-                                    <div className="flex flex-col truncate min-w-0">
-                                        <span className="font-medium text-white truncate">{song.title}</span>
-                                        <span className="text-xs text-zinc-500 group-hover:text-zinc-400 truncate">
-                                            {getSongArtistName(song)} <span className="md:hidden">• {song.duration ? `${Math.floor(song.duration / 60)}:${String(Math.floor(song.duration % 60)).padStart(2, '0')}` : '0:00'}</span>
+                                    <div className="flex min-w-0 flex-col">
+                                        <span className="truncate font-medium text-zinc-900">{song.title}</span>
+                                        <span className="truncate text-xs text-zinc-500">
+                                            {getSongArtistName(song)} <span className="md:hidden"> · {song.duration || '0:00'}</span>
                                         </span>
                                     </div>
                                 </div>
 
-                                {/* Artist - hidden on mobile */}
-                                <span className="hidden md:block hover:underline cursor-pointer truncate" onClick={(e) => {
-                                    e.stopPropagation();
-                                }}>
-                                    {getSongArtistName(song)}
-                                </span>
-
-                                {/* Date Added - hidden on mobile */}
-                                <span className="hidden md:block">
-                                    {song.addedAt ? new Date(song.addedAt).toLocaleDateString() : t('justNow')}
-                                </span>
-
-                                {/* Duration + Actions */}
-                                <div className="hidden md:flex items-center justify-end gap-4">
-                                    <span className="font-mono text-xs">
-                                        {song.duration ? `${Math.floor(song.duration / 60)}:${String(Math.floor(song.duration % 60)).padStart(2, '0')}` : '0:00'}
-                                    </span>
+                                <span className="hidden truncate hover:underline md:block">{getSongArtistName(song)}</span>
+                                <span className="hidden md:block">{song.addedAt ? new Date(song.addedAt).toLocaleDateString() : t('justNow')}</span>
+                                <div className="hidden items-center justify-end gap-4 md:flex">
+                                    <span className="font-mono text-xs">{song.duration || '0:00'}</span>
                                     {isOwner && (
                                         <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                handleRemoveSong(song.id);
+                                            onClick={(event) => {
+                                                event.stopPropagation();
+                                                void handleRemoveSong(song.id);
                                             }}
-                                            className="opacity-0 group-hover:opacity-100 text-zinc-500 hover:text-white transition-opacity"
+                                            className="text-zinc-500 opacity-0 transition-opacity hover:text-red-600 group-hover:opacity-100"
+                                            title={t('delete')}
                                         >
                                             <Trash2 size={16} />
                                         </button>
                                     )}
                                 </div>
 
-                                {/* Mobile delete button */}
                                 {isOwner && (
                                     <button
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            handleRemoveSong(song.id);
+                                        onClick={(event) => {
+                                            event.stopPropagation();
+                                            void handleRemoveSong(song.id);
                                         }}
-                                        className="md:hidden text-zinc-500 hover:text-white p-2"
+                                        className="p-2 text-zinc-500 hover:text-red-600 md:hidden"
+                                        title={t('delete')}
                                     >
                                         <Trash2 size={18} />
                                     </button>
@@ -290,10 +258,10 @@ export const PlaylistDetail: React.FC<PlaylistDetailProps> = ({ playlistId, onBa
                 </div>
             </div>
 
-            {/* Back button absolute */}
             <button
                 onClick={onBack}
-                className="absolute top-6 left-6 z-50 w-8 h-8 rounded-full bg-black/50 flex items-center justify-center text-white hover:bg-black/70 transition-colors"
+                className="absolute left-6 top-6 z-50 flex h-8 w-8 items-center justify-center rounded-full border border-zinc-200 bg-white text-zinc-700 shadow transition-colors hover:bg-zinc-100"
+                title={t('goBack')}
             >
                 <ArrowLeft size={18} />
             </button>

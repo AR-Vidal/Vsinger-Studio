@@ -163,12 +163,14 @@ export const SongList: React.FC<SongListProps> = ({
 
     const filteredSongs = useMemo(() => {
         return songs.filter(song => {
+            const lowerSearch = searchQuery.toLowerCase();
+            const tags = Array.isArray(song.tags) ? song.tags : [];
             // 1. Search Logic
             const matchesSearch =
-                song.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                song.style.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                (song.singerName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-                song.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()));
+                (song.title || '').toLowerCase().includes(lowerSearch) ||
+                (song.style || '').toLowerCase().includes(lowerSearch) ||
+                (song.singerName || '').toLowerCase().includes(lowerSearch) ||
+                tags.some(tag => String(tag).toLowerCase().includes(lowerSearch));
 
             if (!matchesSearch) return false;
 
@@ -204,7 +206,11 @@ export const SongList: React.FC<SongListProps> = ({
             createdAt: new Date(track.created_at || Date.now()),
             track
         }));
-        return [...songItems, ...uploadItems].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+        return [...songItems, ...uploadItems].sort((a, b) => {
+            const bTime = b.createdAt instanceof Date ? b.createdAt.getTime() : new Date(b.createdAt).getTime();
+            const aTime = a.createdAt instanceof Date ? a.createdAt.getTime() : new Date(a.createdAt).getTime();
+            return (Number.isFinite(bTime) ? bTime : 0) - (Number.isFinite(aTime) ? aTime : 0);
+        });
     }, [filteredSongs, filteredUploads]);
 
     const selectableSongs = useMemo(

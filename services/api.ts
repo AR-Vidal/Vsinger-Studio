@@ -175,6 +175,10 @@ function transformSongs(songs: Song[]): Song[] {
     const resolvedUrl = getAudioUrl(rawUrl, song.id);
     return {
       ...song,
+      title: song.title || 'Untitled',
+      lyrics: song.lyrics || '',
+      style: song.style || '',
+      tags: Array.isArray(song.tags) ? song.tags : [],
       audio_url: resolvedUrl,
       audioUrl: resolvedUrl,
       has_singer: Boolean(song.has_singer),
@@ -609,8 +613,23 @@ export interface Playlist {
 }
 
 export const playlistsApi = {
-  create: (name: string, description: string, isPublic: boolean, token: string): Promise<{ playlist: Playlist }> =>
-    api('/api/playlists', { method: 'POST', body: { name, description, isPublic }, token }),
+  create: (name: string, description: string, isPublic: boolean, token: string, coverUrl?: string): Promise<{ playlist: Playlist }> =>
+    api('/api/playlists', { method: 'POST', body: { name, description, isPublic, coverUrl }, token }),
+
+  uploadCover: async (file: File, token: string): Promise<{ url: string }> => {
+    const formData = new FormData();
+    formData.append('cover', file);
+    const response = await fetch(`${API_BASE}/api/playlists/cover`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: formData,
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: 'Upload failed' }));
+      throw new Error(error.details || error.error || 'Upload failed');
+    }
+    return response.json();
+  },
 
   getMyPlaylists: (token: string): Promise<{ playlists: Playlist[] }> =>
     api('/api/playlists', { token }),

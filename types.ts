@@ -7,6 +7,7 @@ export interface Song {
   style: string;
   coverUrl: string;
   duration: string;
+  durationSeconds?: number;
   createdAt: Date;
   tags: string[];
   audioUrl?: string;

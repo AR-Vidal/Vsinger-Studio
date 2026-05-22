@@ -580,6 +580,16 @@ function shouldUseAutoLyricsMode(params: GenerationParams): boolean {
   );
 }
 
+function shouldUseRestGeneration(params: GenerationParams): boolean {
+  const taskType = params.taskType || 'text2music';
+  return (
+    taskType === 'text2music' &&
+    !params.referenceAudioUrl &&
+    !params.sourceAudioUrl &&
+    !params.audioCodes
+  );
+}
+
 function wantsChineseLyrics(params: GenerationParams): boolean {
   return params.vocalLanguage === 'zh' || params.vocalLanguage === 'yue';
 }
@@ -1048,12 +1058,12 @@ async function processGeneration(
     return;
   }
 
-  if (shouldUseAutoLyricsMode(params)) {
+  if (shouldUseRestGeneration(params)) {
     try {
       await processGenerationViaRest(jobId, params, job);
       return;
     } catch (error) {
-      if (wantsChineseLyrics(params)) {
+      if (shouldUseAutoLyricsMode(params) && wantsChineseLyrics(params)) {
         console.error(`Job ${jobId}: Chinese auto-lyrics generation failed`, error);
         job.status = 'failed';
         job.error = error instanceof Error ? error.message : 'Chinese auto-lyrics generation failed';

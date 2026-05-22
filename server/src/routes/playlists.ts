@@ -1,10 +1,25 @@
 import { Router, Response } from 'express';
+import multer from 'multer';
+import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { pool } from '../db/pool.js';
 import { authMiddleware, optionalAuthMiddleware, AuthenticatedRequest } from '../middleware/auth.js';
 import { getStorageProvider } from '../services/storage/factory.js';
 
 const router = Router();
+
+const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 5 * 1024 * 1024 },
+    fileFilter: (_req, file, cb) => {
+        const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+        if (allowedTypes.includes(file.mimetype)) {
+            cb(null, true);
+        } else {
+            cb(new Error('Invalid file type. Only JPEG, PNG, WebP, and GIF are allowed.'));
+        }
+    }
+});
 
 async function resolveAccessibleAudioUrl(audioUrl: string | null, isPublic: boolean): Promise<string | null> {
     if (!audioUrl) return null;
@@ -15,6 +30,28 @@ async function resolveAccessibleAudioUrl(audioUrl: string | null, isPublic: bool
     }
     return audioUrl;
 }
+
+// Upload playlist cover image
+router.post('/cover', authMiddleware, upload.single('cover'), async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        if (!req.file) {
+            res.status(400).json({ error: 'No file uploaded' });
+            return;
+        }
+
+        const ext = path.extname(req.file.originalname) || '.jpg';
+        const key = `users/${req.user!.id}/playlists/${uuidv4()}${ext}`;
+        const storage = getStorageProvider();
+        await storage.upload(key, req.file.buffer, req.file.mimetype);
+        const url = storage.getPublicUrl(key);
+
+        res.json({ url });
+    } catch (error) {
+        console.error('Playlist cover upload error:', error);
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        res.status(500).json({ error: 'Failed to upload playlist cover', details: errorMessage });
+    }
+});
 
 // Create playlist
 router.post('/', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {

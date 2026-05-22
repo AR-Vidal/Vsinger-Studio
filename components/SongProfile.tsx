@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Song } from '../types';
-import { songsApi, getAudioUrl } from '../services/api';
+import { songsApi } from '../services/api';
+import { normalizeSong } from '../utils/songNormalizer';
 import { useAuth } from '../context/AuthContext';
 import { useI18n } from '../context/I18nContext';
 import { ArrowLeft, Play, Pause, Heart, MoreHorizontal, Music as MusicIcon, Edit3, Eye } from 'lucide-react';
@@ -113,31 +114,7 @@ export const SongProfile: React.FC<SongProfileProps> = ({ songId, onBack, onPlay
         try {
             const response = await songsApi.getFullSong(songId, token);
 
-            const transformedSong: Song = {
-                id: response.song.id,
-                title: response.song.title,
-                lyrics: response.song.lyrics,
-                style: response.song.style,
-                coverUrl: `https://picsum.photos/seed/${response.song.id}/400/400`,
-                duration: response.song.duration
-                    ? `${Math.floor(response.song.duration / 60)}:${String(Math.floor(response.song.duration % 60)).padStart(2, '0')}`
-                    : '0:00',
-                createdAt: new Date(response.song.created_at),
-                tags: response.song.tags || [],
-                audioUrl: getAudioUrl(response.song.audio_url, response.song.id),
-                isPublic: response.song.is_public,
-                likeCount: response.song.like_count || 0,
-                viewCount: response.song.view_count || 0,
-                userId: response.song.user_id,
-                creator: response.song.creator,
-                creator_avatar: response.song.creator_avatar,
-                singerId: response.song.singer_id || null,
-                singerName: response.song.singer_name || response.song.singer_name_snapshot || null,
-                singerNameSnapshot: response.song.singer_name_snapshot || null,
-                hasSinger: Boolean(response.song.has_singer),
-            };
-
-            setSong(transformedSong);
+            setSong(normalizeSong(response.song));
         } catch (error) {
             console.error('Failed to load song:', error);
         } finally {

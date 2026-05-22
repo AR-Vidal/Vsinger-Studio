@@ -25,5 +25,43 @@
     },
     "allowImportingTsExtensions": true,
     "noEmit": true
+  },
+  "include": [
+    "App.tsx",
+    "index.tsx",
+    "vite.config.ts",
+    "vite-env.d.ts",
+    "global.d.ts",
+    "types.ts",
+    "components/**/*.ts",
+    "components/**/*.tsx",
+    "constants/**/*.ts",
+    "context/**/*.ts",
+    "context/**/*.tsx",
+    "data/**/*.ts",
+    "i18n/**/*.ts",
+    "services/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    ".git",
+    ".npm-cache",
+    ".claude",
+    "ACE-Step-1.5",
+    "server",
+    "public"
+  ],
+  "watchOptions": {
+    "excludeDirectories": [
+      "**/node_modules",
+      "dist",
+      ".git",
+      ".npm-cache",
+      ".claude",
+      "ACE-Step-1.5",
+      "server",
+      "public"
+    ]
   }
 }

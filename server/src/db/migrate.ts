@@ -90,25 +90,6 @@ CREATE TABLE IF NOT EXISTS liked_songs (
   PRIMARY KEY (user_id, song_id)
 );
 
--- Comments table
-CREATE TABLE IF NOT EXISTS comments (
-  id TEXT PRIMARY KEY,
-  song_id TEXT NOT NULL REFERENCES songs(id) ON DELETE CASCADE,
-  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  content TEXT NOT NULL,
-  created_at TEXT DEFAULT (datetime('now')),
-  updated_at TEXT DEFAULT (datetime('now'))
-);
-
--- Followers table
-CREATE TABLE IF NOT EXISTS followers (
-  follower_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  following_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  created_at TEXT DEFAULT (datetime('now')),
-  PRIMARY KEY (follower_id, following_id),
-  CHECK (follower_id != following_id)
-);
-
 -- Reference tracks (uploaded audio for use as references)
 CREATE TABLE IF NOT EXISTS reference_tracks (
   id TEXT PRIMARY KEY,
@@ -157,10 +138,6 @@ CREATE INDEX IF NOT EXISTS idx_generation_jobs_user_id ON generation_jobs(user_i
 CREATE INDEX IF NOT EXISTS idx_generation_jobs_status ON generation_jobs(status);
 CREATE INDEX IF NOT EXISTS idx_generation_jobs_created_at ON generation_jobs(created_at);
 CREATE INDEX IF NOT EXISTS idx_playlists_user_id ON playlists(user_id);
-CREATE INDEX IF NOT EXISTS idx_comments_song_id ON comments(song_id);
-CREATE INDEX IF NOT EXISTS idx_comments_created_at ON comments(created_at);
-CREATE INDEX IF NOT EXISTS idx_followers_follower ON followers(follower_id);
-CREATE INDEX IF NOT EXISTS idx_followers_following ON followers(following_id);
 CREATE INDEX IF NOT EXISTS idx_reference_tracks_user_id ON reference_tracks(user_id);
 CREATE INDEX IF NOT EXISTS idx_reference_tracks_created_at ON reference_tracks(created_at);
 CREATE INDEX IF NOT EXISTS idx_virtual_singers_user_id ON virtual_singers(user_id);

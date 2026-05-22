@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Heart, MoreHorizontal, Play, Plus, Search } from 'lucide-react';
+import { Edit2, Heart, MoreHorizontal, Play, Plus, Search, Trash2 } from 'lucide-react';
 import { Playlist, Song } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { useI18n } from '../context/I18nContext';
@@ -25,6 +25,8 @@ interface LibraryViewProps {
   onPlaySong: (song: Song, list?: Song[]) => void;
   onCreatePlaylist: () => void;
   onSelectPlaylist: (playlist: Playlist) => void;
+  onEditPlaylist: (playlist: Playlist) => void;
+  onDeletePlaylist: (playlist: Playlist) => void;
   onAddToPlaylist: (song: Song) => void;
   onOpenVideo?: (song: Song) => void;
   onReusePrompt?: (song: Song) => void;
@@ -39,6 +41,8 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
   onPlaySong,
   onCreatePlaylist,
   onSelectPlaylist,
+  onEditPlaylist,
+  onDeletePlaylist,
   onAddToPlaylist,
   onOpenVideo,
   onReusePrompt,
@@ -54,7 +58,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
     const lower = query.trim().toLowerCase();
     if (!lower) return allSongs;
     return allSongs.filter((song) =>
-      song.title.toLowerCase().includes(lower) ||
+      (song.title || '').toLowerCase().includes(lower) ||
       (song.singerName || '').toLowerCase().includes(lower),
     );
   }, [allSongs, query]);
@@ -63,7 +67,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
     const lower = query.trim().toLowerCase();
     if (!lower) return likedSongs;
     return likedSongs.filter((song) =>
-      song.title.toLowerCase().includes(lower) ||
+      (song.title || '').toLowerCase().includes(lower) ||
       (song.singerName || '').toLowerCase().includes(lower),
     );
   }, [likedSongs, query]);
@@ -121,24 +125,50 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
 
           {activeTab === 'playlists' ? (
             <div className="grid grid-cols-2 gap-6 md:grid-cols-3 xl:grid-cols-5">
-              {playlists.map((playlist) => (
-                <button
-                  key={playlist.id}
-                  type="button"
-                  onClick={() => onSelectPlaylist(playlist)}
-                  className="rounded-3xl border border-zinc-200 bg-zinc-50 p-4 text-left transition hover:-translate-y-0.5 hover:shadow-lg dark:border-white/10 dark:bg-white/[0.03]"
-                >
-                  <div className="aspect-square overflow-hidden rounded-2xl bg-zinc-100 dark:bg-white/5">
-                    {playlist.coverUrl ? (
-                      <img src={playlist.coverUrl} alt={playlist.name} className="h-full w-full object-cover" />
-                    ) : (
-                      <AlbumCover seed={playlist.id || playlist.name} size="full" className="h-full w-full" />
-                    )}
-                  </div>
-                  <div className="mt-3 font-semibold text-zinc-900 dark:text-white">{playlist.name}</div>
-                  <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{playlist.description || t('byYou')}</div>
-                </button>
-              ))}
+              {playlists.map((playlist) => {
+                const coverUrl = playlist.coverUrl || playlist.cover_url;
+                return (
+                    <div
+                      key={playlist.id}
+                      onClick={() => onSelectPlaylist(playlist)}
+                      className="group relative rounded-3xl border border-zinc-200 bg-zinc-50 p-4 text-left transition hover:-translate-y-0.5 hover:shadow-lg dark:border-white/10 dark:bg-white/[0.03] cursor-pointer"
+                    >
+                      <div className="absolute right-3 top-3 z-10 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            onEditPlaylist(playlist);
+                          }}
+                          className="rounded-full bg-white/95 p-2 text-zinc-600 shadow hover:text-zinc-900"
+                          title={t('editPlaylist')}
+                        >
+                          <Edit2 size={14} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            onDeletePlaylist(playlist);
+                          }}
+                          className="rounded-full bg-white/95 p-2 text-zinc-600 shadow hover:text-red-600"
+                          title={t('deletePlaylist')}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                      <div className="aspect-square overflow-hidden rounded-2xl bg-zinc-100 dark:bg-white/5">
+                        {coverUrl ? (
+                          <img src={coverUrl} alt={playlist.name} className="h-full w-full object-cover" />
+                        ) : (
+                          <AlbumCover seed={playlist.id || playlist.name} size="full" className="h-full w-full" />
+                        )}
+                      </div>
+                      <div className="mt-3 font-semibold text-zinc-900 dark:text-white">{playlist.name}</div>
+                      <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{playlist.description || t('byYou')}</div>
+                    </div>
+                );
+              })}
             </div>
           ) : songsToShow.length === 0 ? (
             <div className="rounded-3xl border border-dashed border-zinc-300 px-6 py-12 text-center text-sm text-zinc-500 dark:border-white/10 dark:text-zinc-400">

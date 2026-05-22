@@ -5,14 +5,14 @@ import { SongList } from './components/SongList';
 import { RightSidebar } from './components/RightSidebar';
 import { Player } from './components/Player';
 import { LibraryView } from './components/LibraryView';
-import { CreatePlaylistModal, AddToPlaylistModal } from './components/PlaylistModals';
+import { CreatePlaylistModal, AddToPlaylistModal, EditPlaylistModal } from './components/PlaylistModals';
 import { VideoGeneratorModal } from './components/VideoGeneratorModal';
 import { UsernameModal } from './components/UsernameModal';
 import { UserProfile } from './components/UserProfile';
 import { SettingsModal } from './components/SettingsModal';
 import { SongProfile } from './components/SongProfile';
 import { Song, GenerationParams, View, Playlist, VirtualSinger } from './types';
-import { generateApi, songsApi, playlistsApi, singersApi, getAudioUrl } from './services/api';
+import { generateApi, songsApi, playlistsApi, singersApi } from './services/api';
 import { useAuth } from './context/AuthContext';
 import { useResponsive } from './context/ResponsiveContext';
 import { I18nProvider, useI18n } from './context/I18nContext';
@@ -22,6 +22,8 @@ import { Toast, ToastType } from './components/Toast';
 import { TrainingPanel } from './components/TrainingPanel';
 import { VirtualSingerManager } from './components/VirtualSingerManager';
 import { ConfirmDialog } from './components/ConfirmDialog';
+import { ErrorBoundary } from './components/ErrorBoundary';
+import { normalizeSong, normalizeSongs } from './utils/songNormalizer';
 
 
 function AppContent() {
@@ -78,6 +80,7 @@ function AppContent() {
 
   // Modals
   const [isCreatePlaylistModalOpen, setIsCreatePlaylistModalOpen] = useState(false);
+  const [playlistToEdit, setPlaylistToEdit] = useState<Playlist | null>(null);
   const [isAddToPlaylistModalOpen, setIsAddToPlaylistModalOpen] = useState(false);
   const [songToAddToPlaylist, setSongToAddToPlaylist] = useState<Song | null>(null);
 
@@ -307,35 +310,7 @@ function AppContent() {
           songsApi.getLikedSongs(token)
         ]);
 
-      const mapSong = (s: any): Song => ({
-          id: s.id,
-          title: s.title,
-          lyrics: s.lyrics,
-          style: s.style,
-          coverUrl: `https://picsum.photos/seed/${s.id}/400/400`,
-          duration: s.duration && s.duration > 0 ? `${Math.floor(s.duration / 60)}:${String(Math.floor(s.duration % 60)).padStart(2, '0')}` : '0:00',
-          createdAt: new Date(s.created_at || s.createdAt),
-          tags: s.tags || [],
-          audioUrl: getAudioUrl(s.audio_url, s.id),
-          isPublic: s.is_public,
-          likeCount: s.like_count || 0,
-          viewCount: s.view_count || 0,
-          userId: s.user_id,
-          creator: s.creator,
-          ditModel: s.dit_model || s.ditModel,
-          singerId: s.singer_id || s.singerId || null,
-          singerName: s.singer_name || s.singerName || s.singer_name_snapshot || null,
-          singerNameSnapshot: s.singer_name_snapshot || s.singerNameSnapshot || null,
-          hasSinger: Boolean(s.has_singer ?? s.hasSinger),
-          generationParams: (() => {
-            try {
-              if (!s.generation_params) return undefined;
-              return typeof s.generation_params === 'string' ? JSON.parse(s.generation_params) : s.generation_params;
-            } catch {
-              return undefined;
-            }
-          })(),
-        });
+      const mapSong = (s: any): Song => normalizeSong(s);
 
         const librarySongs = librarySongsRes.songs.map(mapSong);
         const likedSongs = likedSongsRes.songs.map(mapSong);
@@ -688,35 +663,7 @@ function AppContent() {
     if (!token) return;
     try {
       const response = await songsApi.getLibrarySongs(token);
-      const loadedSongs: Song[] = response.songs.map(s => ({
-        id: s.id,
-        title: s.title,
-        lyrics: s.lyrics,
-        style: s.style,
-        coverUrl: `https://picsum.photos/seed/${s.id}/400/400`,
-        duration: s.duration && s.duration > 0 ? `${Math.floor(s.duration / 60)}:${String(Math.floor(s.duration % 60)).padStart(2, '0')}` : '0:00',
-        createdAt: new Date(s.created_at),
-        tags: s.tags || [],
-        audioUrl: getAudioUrl(s.audio_url, s.id),
-        isPublic: s.is_public,
-        likeCount: s.like_count || 0,
-        viewCount: s.view_count || 0,
-        userId: s.user_id,
-        creator: s.creator,
-        ditModel: s.ditModel,
-        singerId: s.singer_id || null,
-        singerName: s.singer_name || s.singer_name_snapshot || null,
-        singerNameSnapshot: s.singer_name_snapshot || null,
-        hasSinger: Boolean(s.has_singer),
-        generationParams: (() => {
-          try {
-            if (!s.generation_params) return undefined;
-            return typeof s.generation_params === 'string' ? JSON.parse(s.generation_params) : s.generation_params;
-          } catch {
-            return undefined;
-          }
-        })(),
-      }));
+      const loadedSongs = normalizeSongs(response.songs);
 
       // Preserve any generating songs that aren't in the loaded list
       setSongs(prev => {
@@ -728,7 +675,11 @@ function AppContent() {
           }
         }
         // Sort by creation date, newest first
-        return mergedSongs.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+        return mergedSongs.sort((a, b) => {
+          const bTime = b.createdAt instanceof Date ? b.createdAt.getTime() : new Date(b.createdAt).getTime();
+          const aTime = a.createdAt instanceof Date ? a.createdAt.getTime() : new Date(a.createdAt).getTime();
+          return (Number.isFinite(bTime) ? bTime : 0) - (Number.isFinite(aTime) ? aTime : 0);
+        });
       });
 
       // If the current selection was a temp/generating song, replace it with newest real song
@@ -1173,10 +1124,10 @@ function AppContent() {
     });
   };
 
-  const createPlaylist = async (name: string, description: string) => {
+  const createPlaylist = async (name: string, description: string, coverUrl?: string) => {
     if (!token) return;
     try {
-      const res = await playlistsApi.create(name, description, true, token);
+      const res = await playlistsApi.create(name, description, true, token, coverUrl);
       setPlaylists(prev => [res.playlist, ...prev]);
 
       if (songToAddToPlaylist) {
@@ -1276,6 +1227,43 @@ function AppContent() {
     setShowUsernameModal(false);
   };
 
+  const updatePlaylist = async (playlistId: string, name: string, description: string, coverUrl?: string) => {
+    if (!token) return;
+    try {
+      const res = await playlistsApi.update(playlistId, { name, description, coverUrl }, token);
+      setPlaylists(prev => prev.map(playlist => playlist.id === playlistId ? { ...playlist, ...res.playlist } : playlist));
+      setPlaylistToEdit(null);
+      showToast(t('playlistUpdated'));
+    } catch (error) {
+      console.error('Update playlist error:', error);
+      showToast(t('failedToUpdatePlaylist'), 'error');
+    }
+  };
+
+  const requestDeletePlaylist = (playlist: Playlist) => {
+    if (!token) return;
+    setConfirmDialog({
+      title: t('deletePlaylistTitle'),
+      message: t('deletePlaylistConfirm'),
+      onConfirm: async () => {
+        setConfirmDialog(null);
+        try {
+          await playlistsApi.delete(playlist.id, token);
+          setPlaylists(prev => prev.filter(item => item.id !== playlist.id));
+          if (viewingPlaylistId === playlist.id) {
+            setViewingPlaylistId(null);
+            setCurrentView('library');
+            window.history.pushState({}, '', '/library');
+          }
+          showToast(t('playlistDeleted'));
+        } catch (error) {
+          console.error('Delete playlist error:', error);
+          showToast(t('failedToDeletePlaylist'), 'error');
+        }
+      },
+    });
+  };
+
   // Render Layout Logic
   const renderContent = () => {
     switch (currentView) {
@@ -1292,6 +1280,8 @@ function AppContent() {
               setIsCreatePlaylistModalOpen(true);
             }}
             onSelectPlaylist={(p) => handleNavigateToPlaylist(p.id)}
+            onEditPlaylist={setPlaylistToEdit}
+            onDeletePlaylist={requestDeletePlaylist}
             onAddToPlaylist={openAddToPlaylistModal}
             onOpenVideo={openVideoGenerator}
             onReusePrompt={handleReuse}
@@ -1322,6 +1312,7 @@ function AppContent() {
         return (
           <PlaylistDetail
             playlistId={viewingPlaylistId}
+            currentPlaylist={playlists.find(playlist => playlist.id === viewingPlaylistId)}
             onBack={handleBackFromPlaylist}
             onPlaySong={playSong}
             onSelect={(s) => {
@@ -1329,6 +1320,8 @@ function AppContent() {
               setShowRightSidebar(true);
             }}
             onNavigateToProfile={handleNavigateToProfile}
+            onEditPlaylist={setPlaylistToEdit}
+            onDeletePlaylist={requestDeletePlaylist}
           />
         );
 
@@ -1529,6 +1522,12 @@ function AppContent() {
         onClose={() => setIsCreatePlaylistModalOpen(false)}
         onCreate={createPlaylist}
       />
+      <EditPlaylistModal
+        isOpen={playlistToEdit !== null}
+        playlist={playlistToEdit}
+        onClose={() => setPlaylistToEdit(null)}
+        onSave={updatePlaylist}
+      />
       <AddToPlaylistModal
         isOpen={isAddToPlaylistModalOpen}
         onClose={() => setIsAddToPlaylistModalOpen(false)}
@@ -1601,7 +1600,9 @@ function AppContent() {
 export default function App() {
   return (
     <I18nProvider>
-      <AppContent />
+      <ErrorBoundary>
+        <AppContent />
+      </ErrorBoundary>
     </I18nProvider>
   );
 }
